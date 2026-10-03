@@ -1,0 +1,352 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Quicksand:wght@500;600;700&display=swap');
+
+:root {
+  /* Color Palette inspired by the reference images */
+  --bg-deep-navy: #0b1528;
+  --bg-dark-blue: #112240;
+  --bg-navy-surface: #172d54;
+  
+  --panel-light-blue: #d9e9fb;
+  --panel-soft-blue: #c4dcf7;
+  --panel-medium-blue: #93bdee;
+  --panel-card-bg: #eaf3fe;
+  
+  --primary-blue: #1e3a8a;
+  --accent-blue: #2563eb;
+  --accent-gold: #f59e0b;
+  --accent-amber: #d97706;
+  
+  --stitch-blue: #6095d6;
+  --stitch-border: 2px dashed #70a1de;
+  --stitch-border-light: 2px dashed #93bdee;
+  
+  --text-dark: #0f274a;
+  --text-muted: #3b5a82;
+  --text-light: #ffffff;
+  --text-white-soft: #f0f6ff;
+  
+  --shadow-soft: 0 8px 24px rgba(6, 17, 38, 0.25);
+  --shadow-card: 0 12px 30px rgba(7, 21, 46, 0.28);
+  --shadow-button: 0 8px 18px rgba(16, 36, 74, 0.4);
+  
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 9999px;
+  
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  background-color: var(--bg-deep-navy);
+  color: var(--text-light);
+}
+
+/* Touchscreen kiosk viewport container */
+.kiosk-app-container {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  position: relative;
+  background: radial-gradient(circle at 50% 20%, #162b4e 0%, #0b1528 75%, #070d1a 100%);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.8);
+}
+
+/* Handcrafted stitch border utility */
+.stitch-box {
+  border: 2px dashed var(--stitch-blue);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 6px rgba(147, 189, 238, 0.15);
+}
+
+.stitch-panel {
+  background: var(--panel-card-bg);
+  border: 2px dashed var(--stitch-blue);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+/* Kiosk large touch buttons */
+.kiosk-btn {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.05em;
+  padding: 18px 32px;
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+  outline: none;
+  text-decoration: none;
+}
+
+.kiosk-btn:active {
+  transform: scale(0.97);
+}
+
+.kiosk-btn-primary {
+  background: linear-gradient(135deg, #c5dcfa 0%, #a2c6f3 100%);
+  color: var(--text-dark);
+  box-shadow: var(--shadow-button);
+  border: 2px dashed #598ecf;
+}
+
+.kiosk-btn-primary:active {
+  background: linear-gradient(135deg, #b0d0f8 0%, #8db8ef 100%);
+}
+
+.kiosk-btn-navy {
+  background: linear-gradient(135deg, #1b3563 0%, #0f2244 100%);
+  color: #ffffff;
+  border: 2px dashed #5a87be;
+  box-shadow: var(--shadow-button);
+}
+
+.kiosk-btn-navy:active {
+  background: linear-gradient(135deg, #15294e 0%, #0a1831 100%);
+}
+
+.kiosk-btn-accent {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  border: 2px dashed #fcd34d;
+  box-shadow: 0 8px 20px rgba(217, 119, 6, 0.4);
+}
+
+/* Category Menu Button (Large Touch Block) */
+.category-menu-card {
+  background: linear-gradient(145deg, #cde1fa 0%, #b3d1f8 100%);
+  border: 3px dashed #5a8ecf;
+  border-radius: 28px;
+  padding: 34px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(5, 15, 33, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.category-menu-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 6px 16px rgba(5, 15, 33, 0.25);
+}
+
+.category-menu-card .cat-title {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.category-menu-card .cat-subtitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Bouquet / Product Card matching reference image 2 */
+.product-card {
+  background: #dbeafe;
+  background: linear-gradient(160deg, #e3effe 0%, #cfdff5 100%);
+  border: 2.5px dashed #6f9fdc;
+  border-radius: 24px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 10px 24px rgba(7, 18, 38, 0.3);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-card:active {
+  transform: scale(0.98);
+}
+
+/* Price badge in upper-right */
+.product-card .price-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: #ffffff;
+  color: #1e3a8a;
+  border: 1.5px dashed #7ea5d6;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-family: var(--font-serif);
+  font-weight: 800;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+
+/* Product Card white image frame */
+.product-card .image-frame {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #ffffff;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(10, 25, 50, 0.08);
+  margin-top: 24px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.product-card .image-frame img {
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.15));
+}
+
+.product-card .product-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0d2547;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: auto;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+/* Modal styles for Touchscreen Kiosk */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 11, 23, 0.78);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background: linear-gradient(160deg, #f2f7ff 0%, #dce9fa 100%);
+  border: 3px dashed #598fce;
+  border-radius: 32px;
+  width: 100%;
+  max-width: 600px;
+  padding: 32px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  position: relative;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Touch quantity buttons */
+.quantity-ctrl-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 2px dashed #3c6eb0;
+  background: #ffffff;
+  color: #122b52;
+  font-size: 1.8rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(11, 30, 60, 0.15);
+  transition: transform 0.12s ease;
+}
+
+.quantity-ctrl-btn:active {
+  transform: scale(0.92);
+  background: #e2eeff;
+}
+
+/* Toast alert */
+.kiosk-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #11284d;
+  color: #ffffff;
+  border: 2px dashed #93c5fd;
+  border-radius: 9999px;
+  padding: 16px 32px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: toastPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toastPop {
+  from { transform: translate(-50%, 20px) scale(0.9); opacity: 0; }
+  to { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+
+/* Decorative Bow and Ribbons */
+.ribbon-bow {
+  filter: drop-shadow(0 4px 8px rgba(11, 28, 56, 0.25));
+}
+
+/* Animations for subtle floating butterflies */
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(4deg); }
+}
+
+.animate-float {
+  animation: floatGentle 4s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: floatGentle 5s ease-in-out infinite 2s;
+}
