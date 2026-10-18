@@ -1,0 +1,261 @@
+/* Track My Order page */
+.track-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 24px;
+  min-height: 100vh;
+  position: relative;
+}
+
+.track-panel {
+  width: 100%;
+  max-width: 680px;
+  padding: 36px 36px 32px;
+  background: linear-gradient(160deg, #ffffff 0%, #edf5ff 100%);
+  text-align: center;
+  position: relative;
+  z-index: 10;
+}
+
+.track-title {
+  font-family: var(--font-serif);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #0d2547;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.track-sub {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 22px;
+}
+
+.track-label {
+  display: block;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #1e40af;
+  letter-spacing: 0.06em;
+  margin: 14px 0 6px;
+}
+
+.track-input {
+  width: 100%;
+  padding: 16px 18px;
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  background: #ffffff;
+  border: 2px dashed #6095d6;
+  border-radius: 16px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.track-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
+}
+
+.track-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fee2e2;
+  border: 1.5px dashed #ef4444;
+  border-radius: 14px;
+  color: #991b1b;
+  font-weight: 700;
+  font-size: 1rem;
+  text-align: left;
+}
+
+.track-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+  margin: 24px auto 0;
+}
+
+/* Result */
+.track-order-id {
+  display: inline-flex;
+  flex-direction: column;
+  background: #e0f2fe;
+  border: 2px dashed #60a5fa;
+  border-radius: 18px;
+  padding: 10px 28px;
+  margin: 6px 0 20px;
+}
+
+.track-order-id-label {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #1e40af;
+  letter-spacing: 0.08em;
+}
+
+.track-order-id-value {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0f274a;
+  letter-spacing: 0.06em;
+}
+
+.track-steps {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 18px;
+}
+
+.track-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  color: #94a3b8;
+}
+
+.track-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 22px;
+  left: calc(50% + 28px);
+  width: calc(100% - 56px);
+  border-top: 3px dashed #cbd5e1;
+}
+
+.track-step.done:not(:last-child)::after {
+  border-top-color: #22c55e;
+}
+
+.track-step-dot {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+  background: #e2e8f0;
+  color: #64748b;
+  border: 2px solid #cbd5e1;
+}
+
+.track-step.done .track-step-dot {
+  background: #22c55e;
+  border-color: #15803d;
+  color: #ffffff;
+}
+
+.track-step.current .track-step-dot {
+  background: #2563eb;
+  border-color: #1e3a8a;
+  color: #ffffff;
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.2);
+}
+
+.track-step-label {
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.track-step.done .track-step-label,
+.track-step.current .track-step-label {
+  color: #0f274a;
+}
+
+.track-cancelled {
+  display: inline-block;
+  margin: 4px 0 14px;
+  padding: 8px 22px;
+  border-radius: 9999px;
+  background: #fee2e2;
+  border: 2px dashed #ef4444;
+  color: #991b1b;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.track-status-title {
+  font-family: var(--font-serif);
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+.track-status-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 6px 0 14px;
+}
+
+.track-pay {
+  display: inline-block;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-bottom: 18px;
+}
+
+.track-pay-good { background: #dcfce7; color: #166534; border: 1.5px dashed #22c55e; }
+.track-pay-wait { background: #fef3c7; color: #92400e; border: 1.5px dashed #f59e0b; }
+.track-pay-bad  { background: #fee2e2; color: #991b1b; border: 1.5px dashed #ef4444; }
+
+.track-items {
+  background: #ffffff;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 18px;
+  padding: 14px 20px;
+  text-align: left;
+}
+
+.track-item,
+.track-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f274a;
+  padding: 4px 0;
+}
+
+.track-item strong { color: #2563eb; }
+
+.track-total {
+  border-top: 2px dashed #94a3b8;
+  margin-top: 8px;
+  padding-top: 10px;
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.track-refresh-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+}

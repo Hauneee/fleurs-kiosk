@@ -1,10 +1,10 @@
 import React from 'react';
 import { ButterflySvg, BowSvg, FloralCorner } from '../components/Decorations';
 import { Button } from '../components/Button';
-import { Sparkles, Sliders } from 'lucide-react';
+import { Sparkles, SearchCheck } from 'lucide-react';
 import { FLOWER_IMAGES } from '../assets/flowerAssets';
 
-export const HomePage = ({ onStartOrder, onAdmin }) => {
+export const HomePage = ({ onStartOrder, onTrackOrder }) => {
   return (
     <div
       style={{
@@ -32,29 +32,6 @@ export const HomePage = ({ onStartOrder, onAdmin }) => {
       </div>
       <div style={{ position: 'absolute', top: '22%', right: '14%' }} className="animate-float-delayed">
         <ButterflySvg style={{ width: '48px', height: '38px', transform: 'scaleX(-1)' }} />
-      </div>
-
-      {/* Admin quick access in corner */}
-      <div style={{ position: 'absolute', top: '24px', right: '28px', zIndex: 10 }}>
-        <button
-          onClick={onAdmin}
-          style={{
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1.5px dashed rgba(147, 197, 253, 0.4)',
-            borderRadius: '9999px',
-            padding: '8px 18px',
-            color: '#93c5fd',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontSize: '0.9rem',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-        >
-          <Sliders size={18} />
-          <span>STAFF PORTAL</span>
-        </button>
       </div>
 
       {/* Main Showcase Panel */}
@@ -152,6 +129,21 @@ export const HomePage = ({ onStartOrder, onAdmin }) => {
             START ORDER
           </Button>
         </div>
+
+        {/* Track an existing order */}
+        {onTrackOrder && (
+          <div style={{ width: '100%', maxWidth: '420px', marginTop: '18px' }}>
+            <Button
+              variant="navy"
+              size="xl"
+              onClick={onTrackOrder}
+              icon={<SearchCheck size={26} />}
+              style={{ width: '100%', fontSize: '1.3rem', padding: '18px 36px' }}
+            >
+              TRACK MY ORDER
+            </Button>
+          </div>
+        )}
 
         {/* Subtle kiosk hint */}
         <div

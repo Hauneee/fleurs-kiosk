@@ -3,6 +3,8 @@ import { OrderCard } from '../components/OrderCard';
 import { Button } from '../components/Button';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { RatingsPanel } from '../components/RatingsPanel';
+import { ReportsPanel } from '../components/ReportsPanel';
 import {
   fetchOrders,
   updateOrderStatus,
@@ -14,7 +16,9 @@ import {
   Package,
   Layers,
   Database,
-  Filter
+  Filter,
+  Star,
+  BarChart3
 } from 'lucide-react';
 
 export const AdminDashboardPage = ({ onBackToKiosk, onOpenInventory }) => {
@@ -23,6 +27,8 @@ export const AdminDashboardPage = ({ onBackToKiosk, onOpenInventory }) => {
   const [error, setError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [connectionStatus, setConnectionStatus] = useState(null);
+  const [showRatings, setShowRatings] = useState(false);
+  const [showReports, setShowReports] = useState(false);
 
   const loadOrders = async () => {
     try {
@@ -61,6 +67,14 @@ export const AdminDashboardPage = ({ onBackToKiosk, onOpenInventory }) => {
     if (activeFilter === 'all') return true;
     return ord.status === activeFilter;
   });
+
+  if (showReports) {
+    return <ReportsPanel onBack={() => setShowReports(false)} />;
+  }
+
+  if (showRatings) {
+    return <RatingsPanel onBack={() => setShowRatings(false)} />;
+  }
 
   return (
     <div
@@ -125,8 +139,8 @@ export const AdminDashboardPage = ({ onBackToKiosk, onOpenInventory }) => {
           </div>
         </div>
 
-        {/* Action Controls: Refresh, Inventory, Database status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {connectionStatus && (
             <span
               style={{
@@ -148,6 +162,24 @@ export const AdminDashboardPage = ({ onBackToKiosk, onOpenInventory }) => {
               {connectionStatus.connected ? 'SUPABASE LIVE' : 'OFFLINE CACHE'}
             </span>
           )}
+
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setShowReports(true)}
+            icon={<BarChart3 size={20} />}
+          >
+            REPORTS
+          </Button>
+
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setShowRatings(true)}
+            icon={<Star size={20} />}
+          >
+            RATINGS
+          </Button>
 
           <Button
             variant="primary"

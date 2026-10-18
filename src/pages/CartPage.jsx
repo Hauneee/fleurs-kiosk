@@ -1,52 +1,44 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Header } from '../components/Header';
 import { CartItem } from '../components/CartItem';
 import { Button } from '../components/Button';
-import { ErrorMessage } from '../components/ErrorMessage';
 import { FloralCorner } from '../components/Decorations';
-import { ShoppingBag, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react';
-import { createOrder } from '../services/supabase';
+import { ShoppingBag, ArrowLeft, ArrowRight } from 'lucide-react';
+
+// Keeps the two action buttons a comfortable size on phones / the APK
+const cartCss = `
+  .cart-actions > * {
+    min-width: 0;
+  }
+  .cart-actions button {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 12px 16px !important;
+    font-size: clamp(0.85rem, 3.6vw, 1.05rem) !important;
+    letter-spacing: 0.03em !important;
+    gap: 8px !important;
+    white-space: normal !important;
+    line-height: 1.2 !important;
+  }
+  .cart-actions button svg {
+    width: 20px !important;
+    height: 20px !important;
+    flex-shrink: 0;
+  }
+`;
 
 export const CartPage = ({
   cart,
   onUpdateQuantity,
   onRemoveItem,
   onContinueShopping,
-  onOrderSuccess
+  onProceed
 }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
-
   const totalAmount = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+    (sum, item) => sum + Number(item.price) * item.quantity,
     0
   );
-
-  const handleCheckout = async () => {
-    if (cart.length === 0) return;
-
-    try {
-      setIsSubmitting(true);
-      setErrorMessage(null);
-
-      // Save order to Supabase first!
-      const completedOrder = await createOrder(
-        { total_amount: totalAmount },
-        cart
-      );
-
-      // Only navigate to confirmation after database operation succeeds
-      onOrderSuccess(completedOrder);
-    } catch (err) {
-      console.error('Checkout failed:', err);
-      setErrorMessage(
-        err.message ||
-          'Unable to connect to the server. Please check the connection and try again.'
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div
@@ -56,13 +48,14 @@ export const CartPage = ({
         flexDirection: 'column',
         minHeight: '100vh',
         position: 'relative',
-        paddingBottom: '40px'
+        paddingBottom: '72px'
       }}
     >
+      <style>{cartCss}</style>
+
       <FloralCorner position="top-left" />
       <FloralCorner position="top-right" />
 
-      {/* Top Header */}
       <Header
         title="SHOPPING CART"
         onBack={onContinueShopping}
@@ -75,34 +68,26 @@ export const CartPage = ({
           width: '100%',
           maxWidth: '920px',
           margin: '0 auto',
-          padding: '16px 24px',
+          padding: 'clamp(8px, 3vw, 16px) clamp(12px, 4vw, 24px)',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 10
+          zIndex: 10,
+          boxSizing: 'border-box'
         }}
       >
-        {errorMessage && (
-          <ErrorMessage
-            message={errorMessage}
-            onRetry={handleCheckout}
-            actionLabel="RETRY CHECKOUT"
-          />
-        )}
-
         {cart.length === 0 ? (
-          /* Empty Cart State */
           <div
             className="stitch-panel"
             style={{
-              padding: '60px 24px',
+              padding: 'clamp(28px, 8vw, 60px) clamp(14px, 4vw, 24px)',
               textAlign: 'center',
               margin: 'auto 0'
             }}
           >
             <div
               style={{
-                width: '84px',
-                height: '84px',
+                width: 'clamp(60px, 18vw, 84px)',
+                height: 'clamp(60px, 18vw, 84px)',
                 borderRadius: '50%',
                 background: '#ffffff',
                 border: '2px dashed #93c5fd',
@@ -113,13 +98,13 @@ export const CartPage = ({
                 margin: '0 auto 20px auto'
               }}
             >
-              <ShoppingBag size={42} />
+              <ShoppingBag size={36} />
             </div>
 
             <h2
               style={{
                 fontFamily: 'var(--font-serif)',
-                fontSize: '2.2rem',
+                fontSize: 'clamp(1.4rem, 6vw, 2.2rem)',
                 color: '#0d2547',
                 marginBottom: '10px'
               }}
@@ -129,9 +114,9 @@ export const CartPage = ({
 
             <p
               style={{
-                fontSize: '1.2rem',
+                fontSize: 'clamp(0.95rem, 3.8vw, 1.2rem)',
                 color: '#3b5a82',
-                marginBottom: '32px',
+                marginBottom: '28px',
                 fontWeight: 600
               }}
             >
@@ -148,9 +133,8 @@ export const CartPage = ({
             </Button>
           </div>
         ) : (
-          /* Cart Items List */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(14px, 4vw, 24px)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(10px, 3vw, 16px)' }}>
               {cart.map((item) => (
                 <CartItem
                   key={item.id}
@@ -161,15 +145,14 @@ export const CartPage = ({
               ))}
             </div>
 
-            {/* Order Summary & Actions */}
             <div
               className="stitch-panel"
               style={{
-                padding: '28px 32px',
+                padding: 'clamp(16px, 4.5vw, 28px) clamp(14px, 4.5vw, 32px)',
                 background: '#ffffff',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '20px'
+                gap: 'clamp(14px, 3.5vw, 20px)'
               }}
             >
               <div
@@ -177,14 +160,16 @@ export const CartPage = ({
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '8px',
                   borderBottom: '2px dashed #93c5fd',
-                  paddingBottom: '16px'
+                  paddingBottom: 'clamp(10px, 3vw, 16px)'
                 }}
               >
                 <span
                   style={{
                     fontFamily: 'var(--font-serif)',
-                    fontSize: '1.8rem',
+                    fontSize: 'clamp(1.2rem, 5vw, 1.8rem)',
                     fontWeight: 800,
                     color: '#0d2547'
                   }}
@@ -194,7 +179,7 @@ export const CartPage = ({
                 <span
                   style={{
                     fontFamily: 'var(--font-serif)',
-                    fontSize: '2.6rem',
+                    fontSize: 'clamp(1.6rem, 8vw, 2.6rem)',
                     fontWeight: 800,
                     color: '#1d4ed8'
                   }}
@@ -203,38 +188,30 @@ export const CartPage = ({
                 </span>
               </div>
 
-              {/* Action Buttons: CONTINUE SHOPPING & CHECKOUT */}
               <div
+                className="cart-actions"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                  gap: '18px'
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+                  gap: 'clamp(8px, 2.5vw, 14px)'
                 }}
               >
                 <Button
                   variant="navy"
-                  size="xl"
+                  size="lg"
                   onClick={onContinueShopping}
-                  disabled={isSubmitting}
-                  icon={<ArrowLeft size={24} />}
+                  icon={<ArrowLeft size={20} />}
                 >
                   CONTINUE SHOPPING
                 </Button>
 
                 <Button
                   variant="accent"
-                  size="xl"
-                  onClick={handleCheckout}
-                  disabled={isSubmitting}
-                  icon={
-                    isSubmitting ? (
-                      <Loader2 size={26} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={26} />
-                    )
-                  }
+                  size="lg"
+                  onClick={onProceed}
+                  icon={<ArrowRight size={20} />}
                 >
-                  {isSubmitting ? 'SAVING ORDER...' : 'CHECKOUT'}
+                  CHECKOUT
                 </Button>
               </div>
             </div>

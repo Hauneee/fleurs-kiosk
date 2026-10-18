@@ -2,9 +2,9 @@ import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { BowSvg, ButterflySvg, FloralCorner } from '../components/Decorations';
 import { Button } from '../components/Button';
-import { CheckCircle2, Sparkles, Printer, RotateCcw } from 'lucide-react';
+import { CheckCircle2, RotateCcw, SearchCheck } from 'lucide-react';
 
-export const OrderConfirmationPage = ({ order, onNewOrder }) => {
+export const OrderConfirmationPage = ({ order, onNewOrder, onTrack }) => {
   useEffect(() => {
     // Launch celebratory floral confetti
     try {
@@ -84,14 +84,15 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
         <h1
           style={{
             fontFamily: 'var(--font-serif)',
-            fontSize: '3rem',
+            fontSize: '2.5rem',
             fontWeight: 800,
             color: '#0d2547',
             letterSpacing: '0.04em',
+            lineHeight: 1.15,
             marginBottom: '8px'
           }}
         >
-          ORDER CONFIRMED
+          ORDER SUCCESSFULLY PLACED!
         </h1>
 
         <p
@@ -103,7 +104,7 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
             marginBottom: '24px'
           }}
         >
-          Thank you for choosing Fleurs by Blossoms Craft!
+          Thank you for your order!
         </p>
 
         {/* Order Details Badge */}
@@ -116,11 +117,11 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
             display: 'inline-flex',
             flexDirection: 'column',
             gap: '4px',
-            marginBottom: '28px'
+            marginBottom: '12px'
           }}
         >
           <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e40af' }}>
-            YOUR KIOSK ORDER NUMBER
+            ORDER ID
           </span>
           <span
             style={{
@@ -137,6 +138,18 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
             {formattedDate}
           </span>
         </div>
+
+        {/* Reminder: how to track the order later */}
+        <p
+          style={{
+            fontSize: '1.05rem',
+            color: '#1e40af',
+            fontWeight: 700,
+            marginBottom: '28px'
+          }}
+        >
+          Remember this number! Use it with your phone number to track your order.
+        </p>
 
         {/* Purchased Items List */}
         <div
@@ -221,8 +234,28 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
           </div>
         </div>
 
-        {/* NEW ORDER Button */}
-        <div style={{ width: '100%', maxWidth: '380px', margin: '0 auto' }}>
+        {/* TRACK + NEW ORDER Buttons */}
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '380px',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}
+        >
+          {onTrack && (
+            <Button
+              variant="navy"
+              size="xl"
+              onClick={onTrack}
+              icon={<SearchCheck size={26} />}
+              style={{ width: '100%', padding: '18px 32px' }}
+            >
+              TRACK THIS ORDER
+            </Button>
+          )}
           <Button
             variant="accent"
             size="xl"
@@ -230,7 +263,7 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
             icon={<RotateCcw size={28} />}
             style={{ width: '100%', padding: '20px 32px' }}
           >
-            NEW ORDER
+            BACK TO MENU
           </Button>
         </div>
 
@@ -242,7 +275,7 @@ export const OrderConfirmationPage = ({ order, onNewOrder }) => {
             fontWeight: 600
           }}
         >
-          Your order has been recorded in the floristry system. Please proceed to the counter.
+          Your order has been received and is now being processed.
         </p>
       </div>
     </div>

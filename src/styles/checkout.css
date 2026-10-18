@@ -1,0 +1,139 @@
+/* ==========================================================
+   Checkout flow styles: customer information, payment, confirmation
+   (imported in App.jsx after kiosk.css)
+   ========================================================== */
+
+/* kiosk.css disables text selection everywhere; typing fields must stay usable */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.checkout-btn-full {
+  width: 100%;
+}
+
+/* ---------- Customer information form ---------- */
+.checkout-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkout-label {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0d2547;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.checkout-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.checkout-input-icon {
+  position: absolute;
+  left: 18px;
+  display: flex;
+  align-items: center;
+  color: #3b82f6;
+  pointer-events: none;
+}
+
+.checkout-input {
+  width: 100%;
+  min-height: 68px;
+  padding: 16px 20px 16px 62px;
+  font-family: var(--font-sans);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #0f274a;
+  background: #ffffff;
+  border: 2.5px dashed #93c5fd;
+  border-radius: 20px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.checkout-input::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.checkout-input:focus {
+  border-style: solid;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.18);
+}
+
+.checkout-input.has-error {
+  border-style: solid;
+  border-color: #ef4444;
+  background: #fff5f5;
+}
+
+.checkout-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #b91c1c;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.checkout-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fef2f2;
+  border: 2px dashed #f87171;
+  border-radius: 16px;
+  padding: 14px 18px;
+  color: #b91c1c;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* ---------- Payment page ---------- */
+.payment-qr-frame {
+  width: min(86vw, clamp(260px, 44vh, 460px));
+  aspect-ratio: 1 / 1;
+  background: #ffffff;
+  border: 3px dashed #60a5fa;
+  border-radius: 28px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 28px rgba(11, 28, 56, 0.2);
+}
+
+.payment-qr-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+}
+
+.payment-qr-missing {
+  text-align: center;
+  color: #475569;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 12px;
+}
+
+/* Spinner used on the SAVING ORDER button */
+@keyframes checkoutSpin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: checkoutSpin 1s linear infinite;
+}

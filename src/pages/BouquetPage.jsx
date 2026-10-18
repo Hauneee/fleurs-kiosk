@@ -68,7 +68,7 @@ export const BouquetPage = ({
           <div style={{ flex: 1, width: '100%' }}>
             <ProductGrid
               products={products}
-              columns={2}
+              columns={3}
               onSelectProduct={(product) => setSelectedProduct(product)}
             />
           </div>

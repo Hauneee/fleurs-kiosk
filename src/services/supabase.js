@@ -251,66 +251,75 @@ export const seedDefaultProducts = async () => {
 /**
  * Create Order in Supabase
  * Performs relational insert: orders -> order_items
+ * Called only after the customer confirms payment.
+ * Requires the database setup in supabase/migration_checkout_update.sql,
+ * migration_payment_reference.sql and migration_admin_dashboard.sql.
  */
 export const createOrder = async (orderPayload, items) => {
+  const customer = orderPayload.customer || {};
+
+  // Customer information is required for every kiosk order
+  if (
+    !customer.name?.trim() ||
+    !customer.email?.trim() ||
+    !customer.phone?.trim() ||
+    !customer.section?.trim()
+  ) {
+    throw new Error('Customer information is missing. Please go back and fill in all fields.');
+  }
+
+  // The receipt reference number is required for every kiosk order
+  const paymentReference = (orderPayload.payment_reference || '').trim();
+  if (!paymentReference) {
+    throw new Error('The payment reference number is missing. Please go back and enter it.');
+  }
+
   const orderNumber = `#${Math.floor(100000 + Math.random() * 900000)}`;
   const now = new Date().toISOString();
 
   const newOrder = {
     order_number: orderNumber,
+    customer_name: customer.name.trim(),
+    customer_email: customer.email.trim(),
+    customer_phone: customer.phone.trim(),
+    customer_section: customer.section.trim(),
     total_amount: orderPayload.total_amount,
     status: 'pending',
+    payment_status: 'payment_submitted',
+    payment_reference: paymentReference,
     created_at: now
   };
 
   if (isSupabaseConfigured() && supabase) {
     try {
-      // 1. Insert order
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert([newOrder])
-        .select()
-        .single();
+      // The database function saves the order and its items together (all or nothing)
+      // and takes the prices from the products table.
+      const { data, error } = await supabase.rpc('create_kiosk_order', {
+        p_customer_name: customer.name.trim(),
+        p_customer_email: customer.email.trim(),
+        p_customer_phone: customer.phone.trim(),
+        p_customer_section: customer.section.trim(),
+        p_payment_reference: paymentReference,
+        p_items: items.map((item) => ({
+          product_id: item.product_id || item.id,
+          quantity: item.quantity
+        }))
+      });
 
-      if (orderError) throw orderError;
-
-      // 2. Prepare relational order_items
-      const orderItemsToInsert = items.map((item) => ({
-        order_id: orderData.id,
-        product_id: item.product_id || item.id,
-        product_name: item.name,
-        quantity: item.quantity,
-        unit_price: item.price,
-        subtotal: item.price * item.quantity
-      }));
-
-      // 3. Insert order_items
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItemsToInsert);
-
-      if (itemsError) {
-        console.error('Failed to insert order items:', itemsError);
-        // Rollback / delete orphaned order
-        await supabase.from('orders').delete().eq('id', orderData.id);
-        throw new Error(`Failed to save order details: ${itemsError.message}`);
+      if (error) throw error;
+      if (!data || !data.order_number) {
+        throw new Error('Empty response from the server');
       }
 
-      // Also save to local backup so user can view offline
-      const localOrders = getLocalOrders();
-      localOrders.unshift({
-        ...orderData,
-        order_items: orderItemsToInsert
-      });
-      saveLocalOrders(localOrders);
-
-      return {
-        ...orderData,
-        order_items: orderItemsToInsert
-      };
+      return data;
     } catch (err) {
       console.error('Supabase order creation failed:', err);
-      throw new Error(`Unable to connect to the server. Please check the connection and try again.`);
+      if (/Product not available/i.test(err?.message || '')) {
+        throw new Error(
+          'One of the items in your cart is no longer available. Please go back to the cart and review your order.'
+        );
+      }
+      throw new Error('Unable to connect to the server. Please check the connection and try again.');
     }
   }
 
@@ -318,10 +327,7 @@ export const createOrder = async (orderPayload, items) => {
   // Store reliably in local orders database
   const fallbackOrder = {
     id: `ord-${Date.now()}`,
-    order_number: orderNumber,
-    total_amount: orderPayload.total_amount,
-    status: 'pending',
-    created_at: now,
+    ...newOrder,
     order_items: items.map((item) => ({
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       product_id: item.product_id || item.id,
@@ -337,6 +343,56 @@ export const createOrder = async (orderPayload, items) => {
   saveLocalOrders(localOrders);
 
   return fallbackOrder;
+};
+
+/**
+ * Look up the status of an order (used by the kiosk "Track My Order" page).
+ * The customer must give the order number AND the phone number used on the order.
+ * Returns only the status, payment status, items and total - never personal details.
+ * Returns null when no order matches (wrong number and wrong phone look the same).
+ * Requires supabase/migration_track_order.sql.
+ */
+export const trackOrder = async (orderNumber, phone) => {
+  const cleanNumber = String(orderNumber || '').replace(/\D/g, '');
+  const cleanPhone = String(phone || '').replace(/\D/g, '');
+
+  if (cleanNumber.length < 1 || cleanPhone.length < 7) {
+    throw new Error('Please enter your order number and the phone number used for the order.');
+  }
+
+  if (isSupabaseConfigured() && supabase) {
+    const { data, error } = await supabase.rpc('track_order', {
+      p_order_number: `#${cleanNumber}`,
+      p_phone: cleanPhone
+    });
+
+    if (error) {
+      console.error('Order tracking failed:', error);
+      throw new Error('Unable to check your order right now. Please try again.');
+    }
+    return data || null;
+  }
+
+  // Demo mode (no Supabase): look in the orders saved in this browser
+  const last10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+  const match = getLocalOrders().find(
+    (o) =>
+      String(o.order_number || '').replace(/\D/g, '') === cleanNumber &&
+      last10(o.customer_phone) === last10(cleanPhone)
+  );
+  if (!match) return null;
+  return {
+    order_number: match.order_number,
+    status: match.status,
+    payment_status: match.payment_status,
+    total_amount: match.total_amount,
+    created_at: match.created_at,
+    order_items: (match.order_items || []).map((i) => ({
+      product_name: i.product_name,
+      quantity: i.quantity,
+      subtotal: i.subtotal
+    }))
+  };
 };
 
 /**
@@ -425,4 +481,29 @@ export const uploadProductImage = async (file) => {
     .getPublicUrl(filePath);
 
   return data.publicUrl;
+};
+
+/**
+ * Data for the Admin Reports page (orders + product categories)
+ */
+export const fetchReportData = async () => {
+  if (isSupabaseConfigured() && supabase) {
+    const [ordersRes, productsRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select(
+          'id, order_number, total_amount, status, created_at, payment_reference, order_items ( product_id, product_name, quantity, subtotal )'
+        )
+        .order('created_at', { ascending: false }),
+      supabase.from('products').select('id, category')
+    ]);
+
+    if (ordersRes.error) throw ordersRes.error;
+    return {
+      orders: ordersRes.data || [],
+      products: productsRes.data || []
+    };
+  }
+
+  return { orders: getLocalOrders(), products: getLocalProducts() };
 };
