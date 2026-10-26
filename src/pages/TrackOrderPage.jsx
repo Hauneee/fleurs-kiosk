@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BowSvg, FloralCorner } from '../components/Decorations';
 import { Button } from '../components/Button';
@@ -12,7 +11,7 @@ import {
 } from 'lucide-react';
 import { trackOrder, supabase } from '../services/supabase';
 
-const REFRESH_MS = 5000;
+const REFRESH_MS = 15000;
 const IDLE_MS = 120000;
 const MAX_MISSES = 5;
 const LOCK_MS = 30000;
@@ -47,8 +46,6 @@ const prettify = (value) =>
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase());
 
- 
-
 const formatOrderDate = (value) => {
   if (!value) return 'Date unavailable';
 
@@ -69,7 +66,9 @@ const formatOrderDate = (value) => {
   });
 };
 
-
+const sameOrderData = (current, next) =>
+  current != null &&
+  JSON.stringify(current) === JSON.stringify(next);
 
 export const TrackOrderPage = ({
   initialOrderNumber = '',
@@ -94,11 +93,14 @@ export const TrackOrderPage = ({
   const orderInputRef = useRef(null);
   const lookupRef = useRef({ number: '' });
   const onBackRef = useRef(onBack);
+  const proofRequestRef = useRef(0);
+  const lookupRequestRef = useRef(0);
 
   onBackRef.current = onBack;
 
   const locked = lockedUntil > now;
 
+  // Update countdown only while the user is locked out.
   useEffect(() => {
     if (!locked) return undefined;
 
@@ -109,6 +111,7 @@ export const TrackOrderPage = ({
     return () => clearInterval(id);
   }, [locked]);
 
+  // Focus the input when an initial order number is provided.
   useEffect(() => {
     if (initialOrderNumber && orderInputRef.current) {
       orderInputRef.current.focus();
@@ -123,15 +126,13 @@ export const TrackOrderPage = ({
       clearTimeout(timer);
 
       timer = setTimeout(() => {
-        if (onBackRef.current) {
-          onBackRef.current();
-        }
+        onBackRef.current?.();
       }, IDLE_MS);
     };
 
-    reset();
-
     const events = ['pointerdown', 'keydown', 'touchstart'];
+
+    reset();
 
     events.forEach((event) => {
       window.addEventListener(event, reset);
@@ -146,8 +147,10 @@ export const TrackOrderPage = ({
     };
   }, []);
 
-  // Retrieve the proof image path saved against this order.
+  // Load proof photo for the current order.
   const loadProofPhoto = useCallback(async (order) => {
+    const requestId = ++proofRequestRef.current;
+
     if (!supabase || !order?.order_number) {
       setProofUrl('');
       setProofLoading(false);
@@ -181,23 +184,31 @@ export const TrackOrderPage = ({
             '';
 
       if (!proofPath) {
-        setProofUrl('');
+        if (requestId === proofRequestRef.current) {
+          setProofUrl('');
+        }
+
         return;
       }
 
-      // If the RPC returns an existing image URL, use it.
+      // Use an existing URL directly.
       if (/^https?:\/\//i.test(proofPath)) {
-        setProofUrl(proofPath);
+        if (requestId === proofRequestRef.current) {
+          setProofUrl(proofPath);
+        }
+
         return;
       }
 
       const storage = supabase.storage.from('order-proofs');
 
-      // Private buckets need a signed URL.
+      // Generate a signed URL for a private bucket.
       const {
         data: signedData,
         error: signedError
       } = await storage.createSignedUrl(proofPath, 3600);
+
+      if (requestId !== proofRequestRef.current) return;
 
       if (!signedError && signedData?.signedUrl) {
         setProofUrl(signedData.signedUrl);
@@ -207,36 +218,52 @@ export const TrackOrderPage = ({
       // Public bucket fallback.
       const { data: publicData } = storage.getPublicUrl(proofPath);
 
-      if (publicData?.publicUrl) {
-        setProofUrl(publicData.publicUrl);
-      } else {
-        setProofUrl('');
+      if (requestId === proofRequestRef.current) {
+        setProofUrl(publicData?.publicUrl || '');
       }
     } catch (err) {
       console.error('Unable to load order proof photo:', err);
-      setProofUrl('');
-      setProofError(true);
+
+      if (requestId === proofRequestRef.current) {
+        setProofUrl('');
+        setProofError(true);
+      }
     } finally {
-      setProofLoading(false);
+      if (requestId === proofRequestRef.current) {
+        setProofLoading(false);
+      }
     }
   }, []);
 
+  // Find an order. Silent lookups do not change the visible loading state.
   const runLookup = useCallback(
-    async (number, silent) => {
+    async (number, silent = false) => {
+      const normalizedNumber = String(number || '').trim();
+
+      if (!normalizedNumber) return false;
+
+      const requestId = ++lookupRequestRef.current;
+
       if (!silent) {
         setLoading(true);
         setError('');
       }
 
       try {
-        const data = await trackOrder(number);
+        const data = await trackOrder(normalizedNumber);
+
+        // Ignore stale responses from earlier lookups.
+        if (requestId !== lookupRequestRef.current) {
+          return false;
+        }
 
         if (data) {
-          setResult(data);
-          setMisses(0);
-          lookupRef.current = { number };
+          setResult((current) =>
+            sameOrderData(current, data) ? current : data
+          );
 
-          await loadProofPhoto(data);
+          setMisses(0);
+          lookupRef.current = { number: normalizedNumber };
 
           return true;
         }
@@ -266,7 +293,10 @@ export const TrackOrderPage = ({
 
         return false;
       } catch (err) {
-        if (!silent) {
+        if (
+          requestId === lookupRequestRef.current &&
+          !silent
+        ) {
           setResult(null);
           setProofUrl('');
           setProofError(false);
@@ -278,12 +308,15 @@ export const TrackOrderPage = ({
 
         return false;
       } finally {
-        if (!silent) {
+        if (
+          requestId === lookupRequestRef.current &&
+          !silent
+        ) {
           setLoading(false);
         }
       }
     },
-    [loadProofPhoto]
+    []
   );
 
   const handleCheck = () => {
@@ -298,29 +331,69 @@ export const TrackOrderPage = ({
     runLookup(orderNumber.trim(), false);
   };
 
-  // Refresh the order status while the result is displayed.
+  // Load the proof only when the displayed order number changes.
   useEffect(() => {
-    if (!result) return undefined;
+    if (!result?.order_number) {
+      ++proofRequestRef.current;
+      setProofUrl('');
+      setProofLoading(false);
+      setProofError(false);
+      return;
+    }
 
-    const id = setInterval(() => {
-      if (document.hidden) return;
+    loadProofPhoto(result);
+  }, [result?.order_number, loadProofPhoto]);
 
-      runLookup(lookupRef.current.number, true);
-    }, REFRESH_MS);
+  // Refresh order status without reloading its proof photo.
+  useEffect(() => {
+    if (!result?.order_number) return undefined;
 
-    return () => clearInterval(id);
-  }, [result, runLookup]);
+    let active = true;
+    let refreshing = false;
+
+    const refreshOrder = async () => {
+      if (
+        !active ||
+        refreshing ||
+        document.hidden ||
+        !lookupRef.current.number
+      ) {
+        return;
+      }
+
+      refreshing = true;
+
+      try {
+        await runLookup(lookupRef.current.number, true);
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const id = setInterval(refreshOrder, REFRESH_MS);
+
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [result?.order_number, runLookup]);
 
   const handleClear = () => {
+    // Invalidate requests that are still in progress.
+    ++lookupRequestRef.current;
+    ++proofRequestRef.current;
+
+    lookupRef.current = { number: '' };
+
     setResult(null);
     setError('');
     setOrderNumber('');
+    setLoading(false);
     setProofUrl('');
     setProofLoading(false);
     setProofError(false);
     setShowProof(false);
-
-    lookupRef.current = { number: '' };
+    setMisses(0);
 
     setTimeout(() => {
       orderInputRef.current?.focus();
@@ -396,13 +469,14 @@ export const TrackOrderPage = ({
               type="text"
               inputMode="numeric"
               autoComplete="off"
-              placeholder="e.g. 123456"
+              placeholder="e.g. #123456"
               maxLength={12}
               value={orderNumber ? `#${orderNumber}` : ''}
               onChange={(event) => {
                 setOrderNumber(
                   event.target.value.replace(/\D/g, '')
                 );
+
                 setError('');
               }}
               onKeyDown={onEnter}
@@ -481,9 +555,9 @@ export const TrackOrderPage = ({
               <CalendarDays size={20} />
 
               <span>
-  <strong>Order Date: </strong>
-  {formatOrderDate(result.created_at)}
-</span>
+                <strong>Order Date: </strong>
+                {formatOrderDate(result.created_at)}
+              </span>
             </div>
 
             {isCancelled ? (
@@ -578,6 +652,7 @@ export const TrackOrderPage = ({
                         console.error(
                           'Could not display the order proof image.'
                         );
+
                         setProofUrl('');
                       }}
                       style={{
