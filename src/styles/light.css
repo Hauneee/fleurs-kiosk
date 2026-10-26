@@ -194,7 +194,9 @@
 .fl-light .fl-item__sub {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   min-width: 96px;
   margin-left: auto;
 }
@@ -456,7 +458,8 @@
 
 @media (max-width: 520px) {
   .fl-light .fl-item__sub {
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
     margin-left: 0;
   }
 }
