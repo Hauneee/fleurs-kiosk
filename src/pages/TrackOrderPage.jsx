@@ -600,7 +600,7 @@ export const TrackOrderPage = ({
 
             {/* Proof of Delivery */}
             <section
-              aria-label="Proof of delivery"
+              aria-label="Transaction photo"
               style={{
                 margin: '24px auto',
                 width: '100%',
@@ -621,7 +621,7 @@ export const TrackOrderPage = ({
                 }}
               >
                 <ImageIcon size={22} />
-                PROOF OF DELIVERY
+               TRANSACTION PHOTO
               </div>
 
               {proofLoading ? (
