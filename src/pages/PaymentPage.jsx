@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -39,36 +38,74 @@ export const PaymentPage = ({
   const [cashReceived, setCashReceived] = useState('');
   const [qr, setQr] = useState(null);
   const [qrState, setQrState] = useState('loading');
+  const [qrError, setQrError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(QR_LIFETIME);
 
   const paidRef = useRef(false);
   const intentsRef = useRef([]);
+  const qrRequestRef = useRef(0);
+
+  // Keep cart changes stable without restarting QR generation
+  // merely because the parent creates a new array reference.
+  const cartKey = JSON.stringify(
+    cart.map((item) => ({
+      product_id: item.product_id || item.id,
+      quantity: Number(item.quantity) || 0
+    }))
+  );
 
   useEffect(() => {
     scrollToTop();
     sessionStorage.removeItem(PAY_REF_KEY);
     sessionStorage.removeItem(PAY_METHOD_KEY);
+
+    paidRef.current = false;
+    intentsRef.current = [];
+
+    return () => {
+      qrRequestRef.current += 1;
+    };
   }, []);
 
-  // Remember the selected payment method for the checkout flow.
   useEffect(() => {
-    sessionStorage.setItem(PAY_METHOD_KEY, method);
+    try {
+      sessionStorage.setItem(PAY_METHOD_KEY, method);
+    } catch (error) {
+      console.warn('Unable to save payment method:', error);
+    }
   }, [method]);
 
-  // Generate a GCash payment QR.
+  // Create a GCash QR.
   useEffect(() => {
-    if (method !== 'gcash') return;
+    if (method !== 'gcash') {
+      setQr(null);
+      setQrError('');
+      return undefined;
+    }
 
     let cancelled = false;
+    const requestId = ++qrRequestRef.current;
 
     setQr(null);
+    setQrError('');
     setQrState('loading');
+    setSecondsLeft(QR_LIFETIME);
 
-    (async () => {
+    const createQr = async () => {
       try {
         if (!supabase) {
           throw new Error('Supabase is not configured.');
+        }
+
+        const items = JSON.parse(cartKey);
+
+        if (!items.length || items.some(
+          (item) => !item.product_id || item.quantity < 1
+        )) {
+          throw new Error(
+            'Your cart is empty or contains an invalid item. Please return to your cart and try again.'
+          );
         }
 
         const { data, error } = await supabase.functions.invoke(
@@ -76,91 +113,126 @@ export const PaymentPage = ({
           {
             body: {
               action: 'create',
-              items: cart.map((item) => ({
-                product_id: item.product_id || item.id,
-                quantity: item.quantity
-              }))
+              items
             }
           }
         );
 
-        if (error || !data?.qr_image || !data?.payment_intent_id) {
+        if (error) {
+          console.error('Supabase QR function error:', error);
           throw new Error(
-            error?.message || data?.error || 'No QR returned.'
+            error.message || 'Unable to contact the payment service.'
           );
+        }
+
+        if (data?.error) {
+          console.error('Payment service error:', data.error);
+          throw new Error(
+            typeof data.error === 'string'
+              ? data.error
+              : 'The payment service could not create a QR.'
+          );
+        }
+
+        if (!data?.qr_image || !data?.payment_intent_id) {
+          console.error('Unexpected QR response:', data);
+          throw new Error(
+            'The payment service did not return a QR image and payment reference.'
+          );
+        }
+
+        if (cancelled || requestId !== qrRequestRef.current) {
+          return;
         }
 
         intentsRef.current.push(data.payment_intent_id);
 
-        if (!cancelled) {
-          setQr({
-            id: data.payment_intent_id,
-            image: data.qr_image,
-            testUrl: data.test_url
-          });
-          setQrState('ready');
-        }
-      } catch (error) {
-        console.warn('Could not create payment QR:', error);
+        // Retain only the most recent few references.
+        intentsRef.current = intentsRef.current.slice(-5);
 
-        if (!cancelled) {
+        setQr({
+          id: data.payment_intent_id,
+          image: data.qr_image,
+          testUrl: data.test_url || ''
+        });
+
+        setQrState('ready');
+      } catch (error) {
+        console.error('Could not create payment QR:', error);
+
+        if (!cancelled && requestId === qrRequestRef.current) {
+          setQr(null);
+          setQrError(
+            error?.message ||
+            'Unable to create a QR code. Please try again.'
+          );
           setQrState('failed');
         }
       }
-    })();
+    };
+
+    createQr();
 
     return () => {
       cancelled = true;
     };
-  }, [method, attempt, cart]);
+  }, [method, attempt, cartKey]);
 
-  // Check GCash payment status.
+  // Check payment status only while a QR is available.
   useEffect(() => {
-    if (method !== 'gcash' || qrState !== 'ready' || !qr) {
-      return;
+    if (
+      method !== 'gcash' ||
+      qrState !== 'ready' ||
+      !qr ||
+      !supabase
+    ) {
+      return undefined;
     }
 
     let cancelled = false;
+    let checking = false;
 
     const checkPayment = async () => {
-      if (paidRef.current) return;
+      if (paidRef.current || checking || cancelled) return;
 
-      for (const id of intentsRef.current.slice(-5)) {
-        try {
-          const { data, error } = await supabase.functions.invoke(
-            'paymongo-qr',
-            {
-              body: {
-                action: 'status',
-                payment_intent_id: id
-              }
+      checking = true;
+
+      try {
+        const id = qr.id;
+
+        const { data, error } = await supabase.functions.invoke(
+          'paymongo-qr',
+          {
+            body: {
+              action: 'status',
+              payment_intent_id: id
             }
-          );
-
-          if (cancelled) return;
-          if (error) continue;
-
-          if (data?.status === 'succeeded' && !paidRef.current) {
-            paidRef.current = true;
-
-            sessionStorage.setItem(PAY_REF_KEY, id);
-            sessionStorage.setItem(PAY_METHOD_KEY, 'gcash');
-
-            setPaymentInfo({
-              method: 'gcash',
-              paymentIntentId: id
-            });
-
-            onPaid();
-            return;
           }
-        } catch (error) {
-          // Continue checking payment status.
+        );
+
+        if (cancelled || paidRef.current || error) return;
+
+        if (data?.status === 'succeeded') {
+          paidRef.current = true;
+
+          sessionStorage.setItem(PAY_REF_KEY, id);
+          sessionStorage.setItem(PAY_METHOD_KEY, 'gcash');
+
+          setPaymentInfo({
+            method: 'gcash',
+            paymentIntentId: id
+          });
+
+          onPaid?.();
         }
+      } catch (error) {
+        console.warn('Unable to check payment status:', error);
+      } finally {
+        checking = false;
       }
     };
 
-    const timer = setInterval(checkPayment, 2000);
+    const timer = setInterval(checkPayment, 3000);
 
     return () => {
       cancelled = true;
@@ -170,7 +242,9 @@ export const PaymentPage = ({
 
   // QR countdown.
   useEffect(() => {
-    if (method !== 'gcash' || qrState !== 'ready') return;
+    if (method !== 'gcash' || qrState !== 'ready' || !qr) {
+      return undefined;
+    }
 
     setSecondsLeft(QR_LIFETIME);
 
@@ -181,7 +255,7 @@ export const PaymentPage = ({
     return () => clearInterval(timer);
   }, [method, qrState, qr]);
 
-  // Generate a fresh QR when the current one expires.
+  // Request a replacement QR after expiration.
   useEffect(() => {
     if (
       method === 'gcash' &&
@@ -196,11 +270,16 @@ export const PaymentPage = ({
   const amount = Number(totalAmount) || 0;
   const change = received - amount;
   const cashEnough = received >= amount;
-  const showConfirmButton = method === 'cash';
-  const canConfirm = amount > 0 && cashEnough && !paidRef.current;
 
-  const quickAmounts = [...new Set([amount, 100, 200, 500, 1000])]
-    .filter((value) => value >= amount);
+  const showConfirmButton = method === 'cash';
+  const canConfirm =
+    amount > 0 &&
+    cashEnough &&
+    !paidRef.current;
+
+  const quickAmounts = [
+    ...new Set([amount, 100, 200, 500, 1000])
+  ].filter((value) => value >= amount);
 
   const handleConfirm = () => {
     if (!canConfirm || paidRef.current) return;
@@ -216,7 +295,7 @@ export const PaymentPage = ({
       change
     });
 
-    onPaid();
+    onPaid?.();
   };
 
   const tabStyle = (active, paymentMethod) => {
@@ -241,7 +320,6 @@ export const PaymentPage = ({
               : 'rgba(217, 79, 125, 0.25)'
           }`
         : 'none',
-      opacity: 1,
       transition: 'background 0.2s ease, box-shadow 0.2s ease'
     };
   };
@@ -402,8 +480,15 @@ export const PaymentPage = ({
                 {qrState === 'ready' && qr && (
                   <img
                     src={qr.image}
-                    alt="Payment QR code"
+                    alt="GCash payment QR code"
                     draggable={false}
+                    onError={() => {
+                      console.error('QR image failed to load:', qr.image);
+                      setQrError(
+                        'The QR image could not be displayed. Please get a new QR.'
+                      );
+                      setQrState('failed');
+                    }}
                     style={{
                       display: 'block',
                       width: '100%',
@@ -418,14 +503,20 @@ export const PaymentPage = ({
                 {qrState === 'failed' && (
                   <div
                     style={{
+                      padding: '12px',
                       color: COLORS.pinkDark,
                       fontWeight: 700,
-                      lineHeight: 1.6
+                      lineHeight: 1.6,
+                      overflowWrap: 'anywhere'
                     }}
                   >
+                    <RefreshCw
+                      size={36}
+                      style={{ display: 'block', margin: '0 auto 12px' }}
+                    />
                     QR code unavailable.
                     <br />
-                    Please try again or pay in cash.
+                    {qrError || 'Please try again or pay in cash.'}
                   </div>
                 )}
               </div>
@@ -504,6 +595,17 @@ export const PaymentPage = ({
                 </button>
               )}
 
+              {qrState === 'failed' && (
+                <button
+                  type="button"
+                  onClick={() => setAttempt((number) => number + 1)}
+                  style={utilityButtonStyle}
+                >
+                  <RefreshCw size={18} />
+                  Try again
+                </button>
+              )}
+
               {qrState === 'ready' && qr?.testUrl && (
                 <div
                   style={{
@@ -533,17 +635,6 @@ export const PaymentPage = ({
                     Click here to simulate payment
                   </a>
                 </div>
-              )}
-
-              {qrState === 'failed' && (
-                <button
-                  type="button"
-                  onClick={() => setAttempt((number) => number + 1)}
-                  style={utilityButtonStyle}
-                >
-                  <RefreshCw size={18} />
-                  Try again
-                </button>
               )}
             </>
           ) : (
