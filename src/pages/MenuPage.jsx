@@ -1,8 +1,18 @@
 import React from 'react';
 import { Header } from '../components/Header';
-import { FloralCorner } from '../components/Decorations';
-import { ChevronRight } from 'lucide-react';
 import { CATEGORIES } from '../data/defaultProducts';
+import '../styles/menu.css';
+
+// Photos go in the /public/images folder of the project.
+// The keys are the category ids used in App.jsx.
+
+
+const CATEGORY_IMAGES = {
+  bouquet: '/bouquet.jpg',
+  'solo-flower': '/solo-flower.jpg',
+  'triple-flower': '/triple-flower.jpg',
+};
+
 
 export const MenuPage = ({
   onBack,
@@ -12,80 +22,44 @@ export const MenuPage = ({
   onAdmin
 }) => {
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        position: 'relative',
-        paddingBottom: '40px'
-      }}
-    >
-      <FloralCorner position="top-left" />
-      <FloralCorner position="top-right" />
-
+    <div className="fl-menu">
       <Header
-        title="MENU"
+        title="Menu"
+        variant="light"
         onBack={onBack}
         onCart={onCart}
         cartCount={cartCount}
         onAdmin={onAdmin}
       />
 
-      <main
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-          maxWidth: '1040px',
-          margin: '0 auto',
-          padding: '20px 24px',
-          zIndex: 10
-        }}
-      >
-        <p
-          style={{
-            fontSize: '1.25rem',
-            fontWeight: 700,
-            color: '#93c5fd',
-            letterSpacing: '0.04em',
-            textAlign: 'center',
-            marginBottom: '32px'
-          }}
-        >
-          SELECT A CATEGORY TO BROWSE OUR BLOOMS
+      <main className="fl-menu__main">
+        <h1 className="fl-menu__title">Choose your flowers</h1>
+        <p className="fl-menu__lead">
+          Every rose is hand-folded from satin ribbon, so it never wilts.
         </p>
 
-        <div className="category-grid">
+        <div className="fl-menu__grid">
           {CATEGORIES.map((cat) => (
-            <div
+            <button
               key={cat.id}
+              type="button"
+              className="fl-card"
               onClick={() => onSelectCategory(cat.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') onSelectCategory(cat.id);
-              }}
-              className="category-menu-card tile"
-              role="button"
-              tabIndex={0}
-              aria-label={`Open ${cat.title} category`}
+              aria-label={`Open ${cat.title}`}
             >
-              <div className="tile-img">
-                <img src={cat.image} alt={cat.title} />
-              </div>
-
-              <div>
-                <h2 className="cat-title">{cat.title}</h2>
-                <div className="cat-subtitle">{cat.subtitle}</div>
-              </div>
-
-              <div className="tile-arrow">
-                <ChevronRight size={30} strokeWidth={3} />
-              </div>
-            </div>
+              <span className="fl-card__photo">
+                <img
+                  src={CATEGORY_IMAGES[cat.id] || cat.image}
+                  alt={cat.title}
+                  loading="lazy"
+                />
+              </span>
+              <span className="fl-card__body">
+                <span className="fl-card__name">{cat.title}</span>
+                <span className="fl-card__desc">{cat.subtitle}</span>
+                <span className="fl-card__cta">Choose this</span>
+              </span>
+            </button>
           ))}
         </div>
       </main>

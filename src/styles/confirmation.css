@@ -1,0 +1,265 @@
+/* Order confirmation: scoped to .fl-done so other pages are not affected */
+.fl-done {
+  --fl-white: #ffffff;
+  --fl-blush: #fdeff2;
+  --fl-rose: #c2255c;
+  --fl-rose-dark: #9c1a47;
+  --fl-wine: #3f1424;
+  --fl-muted: #7a5a66;
+  --fl-line: #f1d5dc;
+
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  width: 100%;
+  padding: 28px 16px 48px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, var(--fl-blush) 0%, var(--fl-white) 45%);
+  color: var(--fl-wine);
+}
+
+.fl-done__card {
+  width: 100%;
+  max-width: 640px;
+  padding: 36px 28px;
+  box-sizing: border-box;
+  background: var(--fl-white);
+  border: 1px solid var(--fl-line);
+  border-radius: 24px;
+  box-shadow: 0 14px 36px rgba(194, 37, 92, 0.12);
+  text-align: center;
+}
+
+.fl-done__check {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--fl-rose);
+  color: #fff;
+}
+
+.fl-done__title {
+  margin: 0 0 6px;
+  font-family: var(--font-serif, Georgia, 'Times New Roman', serif);
+  font-size: clamp(1.8rem, 5vw, 2.4rem);
+  line-height: 1.15;
+}
+
+.fl-done__lead {
+  margin: 0 0 22px;
+  font-size: 1.1rem;
+  color: var(--fl-muted);
+}
+
+.fl-done__id {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 28px;
+  margin-bottom: 10px;
+  background: var(--fl-blush);
+  border: 1px solid var(--fl-line);
+  border-radius: 16px;
+}
+
+.fl-done__id-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--fl-muted);
+}
+
+.fl-done__id-value {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: clamp(1.8rem, 6vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+
+.fl-done__id-date {
+  font-size: 0.9rem;
+  color: var(--fl-muted);
+}
+
+.fl-done__hint {
+  margin: 0 auto 26px;
+  max-width: 44ch;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--fl-rose-dark);
+  font-weight: 600;
+}
+
+.fl-done__items {
+  margin-bottom: 26px;
+  padding: 18px 20px;
+  text-align: left;
+  border: 1px solid var(--fl-line);
+  border-radius: 18px;
+}
+
+.fl-done__items h2,
+.fl-photo h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 1.3rem;
+}
+
+.fl-done__row,
+.fl-done__total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 1.1rem;
+}
+
+.fl-done__row b {
+  color: var(--fl-rose);
+}
+
+.fl-done__total {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--fl-line);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.fl-done__total span:last-child {
+  color: var(--fl-rose);
+}
+
+/* Photo booth */
+.fl-photo {
+  margin-bottom: 26px;
+  padding: 20px;
+  background: var(--fl-blush);
+  border-radius: 18px;
+}
+
+.fl-photo__lead {
+  margin: 0 auto 14px;
+  max-width: 42ch;
+  line-height: 1.45;
+  color: var(--fl-muted);
+}
+
+.fl-photo__frame {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 14px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #1f1015;
+}
+
+.fl-photo__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Live camera is mirrored like a selfie; the saved photo is mirrored the same way */
+video.fl-photo__video {
+  transform: scaleX(-1);
+}
+
+.fl-photo__row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.fl-photo__error {
+  margin: 12px 0 0;
+  color: #b42318;
+  font-weight: 600;
+}
+
+.fl-photo--done {
+  background: #ecf8ef;
+}
+
+.fl-photo--done p {
+  margin: 0;
+  color: #2f5d3a;
+}
+
+/* Buttons */
+.fl-done__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.fl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 14px 26px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fl-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fl-btn:focus-visible {
+  outline: 3px solid var(--fl-wine);
+  outline-offset: 3px;
+}
+
+.fl-btn--rose {
+  background: var(--fl-rose);
+  color: #fff;
+}
+
+.fl-btn--soft {
+  background: #fff;
+  color: var(--fl-rose-dark);
+  border: 2px solid var(--fl-rose);
+}
+
+@media (hover: hover) {
+  .fl-btn--rose:hover:not(:disabled) {
+    background: var(--fl-rose-dark);
+  }
+}
+
+@media (max-width: 480px) {
+  .fl-done__card {
+    padding: 28px 18px;
+  }
+}
+/* Remove the unwanted empty red line ONLY on Personal Information */
+.customer-info-page {
+  border-top: none !important;
+  outline: none !important;
+}
+
+/* Remove a decorative line attached to this page's wrapper */
+.customer-info-page::before,
+.customer-info-page::after {
+  content: none !important;
+  display: none !important;
+}

@@ -1,240 +1,314 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fleurs by Blossoms - Admin</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<style>
-:root{--bg:#07101f;--panel:#10213b;--line:#2a4468;--ink:#eef4ff;--mute:#8fa8c8;--blue:#4f9dff;--gold:#f5b942;--ok:#7ee0a3;--bad:#ff8a8a}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
-h1,h2,h3{font-family:Georgia,"Times New Roman",serif;margin:0}
-button,select,input{font:inherit}
-.btn{background:var(--blue);color:#06101f;border:0;border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer}
-.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
-.btn.on{background:var(--gold)}
-.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
-#login{max-width:380px;margin:12vh auto;padding:32px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
-#login h1{font-size:1.8rem;margin-bottom:4px}
-#login label{display:block;margin-top:16px;color:var(--mute);font-size:.9rem}
-#login input{width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1px solid var(--line);background:#0a1830;color:var(--ink)}
-#login .btn{width:100%;margin-top:22px;padding:12px}
-.err{color:var(--bad);margin-top:12px;min-height:1.4em}
-header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid var(--line)}
-header h1{font-size:1.5rem}
-nav,.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-main{padding:24px 28px;max-width:1200px;margin:0 auto}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
-.card h3{font-size:1.05rem;margin-bottom:12px}
-.stat b{display:block;font-size:1.7rem;margin-top:2px}
-.stat span,.mute{color:var(--mute);font-size:.88rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin-bottom:22px}
-.bar{margin-bottom:11px}
-.bar div:first-child{display:flex;justify-content:space-between;font-size:.92rem}
-.bar i{display:block;height:8px;background:#1b3252;border-radius:9px;margin-top:4px}
-.bar i u{display:block;height:100%;background:var(--blue);border-radius:9px}
-.chart{display:flex;align-items:flex-end;gap:4px;height:170px}
-.chart div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0}
-.chart u{width:100%;max-width:34px;background:var(--blue);border-radius:5px 5px 0 0;display:block}
-.chart small{font-size:.62rem;color:var(--mute);margin-top:3px;height:12px;white-space:nowrap}
-.tw{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:520px}
-th{text-align:left;color:var(--mute);font-weight:600;font-size:.85rem}
-th,td{padding:9px 8px;border-bottom:1px solid #1b3252}
-td.t{color:var(--ok);font-weight:700}
-.ord{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel)}
-.ord .row{justify-content:space-between}
-.pill{padding:2px 10px;border-radius:99px;font-size:.78rem;font-weight:700;background:#1b3252}
-.pill.pending{background:#5a4a14;color:var(--gold)}.pill.confirmed{background:#173f66;color:var(--blue)}
-.pill.completed{background:#14452a;color:var(--ok)}.pill.cancelled{background:#4a1d1d;color:var(--bad)}
-.ords{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-.ord ul{margin:8px 0;padding-left:18px;color:var(--mute)}
-.ord select{background:#0a1830;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px}
-.star{color:var(--gold)}
-.hide{display:none!important}
-@media(max-width:640px){header,main{padding:16px}}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fleurs Kiosk | Admin</title>
+  <link rel="icon" href="kiosk.jpg" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+  <link rel="stylesheet" href="admon.css" />
 </head>
+
 <body>
+  <section id="loginScreen">
+    <div class="login-card">
+      <div class="brand-logo login-logo"><img alt="Fleurs Kiosk logo" onerror="this.parentElement.classList.add('no-img')"><span class="logo-fallback">✿</span></div>
+      <h1>Fleurs Kiosk</h1>
+      <p class="muted">Sign in to manage your flower shop.</p>
+      <form id="loginForm">
+        <div class="field">
+          <label for="loginEmail">Admin email</label>
+          <input id="loginEmail" type="email" autocomplete="username" required placeholder="admin@example.com" />
+        </div>
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Enter your password" />
+        </div>
+        <button class="btn primary" id="loginButton" type="submit">Sign in</button>
+        <div id="loginMessage" class="small muted" style="margin-top:12px"></div>
+      </form>
+    </div>
+  </section>
 
-<div id="login">
-  <h1>Staff login</h1>
-  <div class="mute">Fleurs by Blossoms Craft</div>
-  <form id="lf">
-    <label for="em">Email</label><input id="em" type="email" autocomplete="username" required>
-    <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required>
-    <button class="btn" type="submit">Log in</button>
-    <div class="err" id="le" role="alert"></div>
-  </form>
-</div>
+  <div id="app" class="hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <div class="brand-logo"><img alt="Fleurs Kiosk logo" onerror="this.parentElement.classList.add('no-img')"><span class="logo-fallback">✿</span></div>
+        <div class="brand-words">
+          <img class="brand-wordmark" alt="Fleurs Kiosk" onload="this.parentElement.classList.add('has-wordmark')" onerror="this.remove()">
+          <div class="brand-name">Fleurs Kiosk</div>
+          <div class="brand-sub">STORE MANAGEMENT</div>
+        </div>
+      </div>
 
-<div id="app" class="hide">
-  <header>
-    <h1>Fleurs by Blossoms - Admin</h1>
-    <nav>
-      <button class="btn on" data-tab="reports">Reports</button>
-      <button class="btn ghost" data-tab="orders">Orders</button>
-      <button class="btn ghost" data-tab="ratings">Feedback</button>
-      <button class="btn ghost" id="rf">Refresh</button>
-      <button class="btn ghost" id="lo">Log out</button>
-    </nav>
-  </header>5
-  <main id="main"></main>
-</div>
+      <div class="nav-label">OVERVIEW</div>
+      <button class="nav-btn active" data-page="dashboard"><span class="nav-icon">⌂</span>Dashboard</button>
+      <div class="nav-label">STORE</div>
+      <button class="nav-btn" data-page="orders"><span class="nav-icon">▤</span>Orders & Transactions</button>
+      <button class="nav-btn" data-page="customers"><span class="nav-icon">♙</span>Customers</button>
+      <button class="nav-btn" data-page="feedback"><span class="nav-icon">☆</span>Feedback & Ratings</button>
+      <div class="nav-label">ANALYTICS</div>
+      <button class="nav-btn" data-page="reports"><span class="nav-icon">▥</span>Sales Reports</button>
 
-<script>
-// 1) Paste your anon public key (Supabase > Project Settings > API Keys)
-const SUPABASE_URL = 'https://ylkrjvmwwuhitqmysrxf.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsa3Jqdm13d3VoaXRxbXlzcnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMjAyMTIsImV4cCI6MjEwNjU5NjIxMn0.CyrwrASzk3EAJ5ChSgSGExl0qffdXOHkzg1_o7lPCFA';
+    </aside>
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const peso = (n) => '\u20B1' + Number(n || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-const dkey = (d) => new Date(d).toLocaleDateString('en-CA');
-const pday = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
-const short = (k) => pday(k).toLocaleDateString('en-PH', {month: 'short', day: 'numeric'});
-const wk = (k) => { const x = pday(k); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return dkey(x); };
-const catOf = (c, n) => { const t = `${c || ''} ${n || ''}`.toLowerCase(); return t.includes('triple') ? 'Triple Flower' : t.includes('bouquet') ? 'Bouquet' : t.includes('solo') ? 'Solo Flower' : 'Other'; };
+    <main class="main">
+      <header class="topbar">
+        <div class="row">
+          <button class="btn mobile-menu" id="menuButton" aria-label="Open navigation">☰</button>
+          <div>
+            <h2 id="topTitle">Dashboard</h2>
+            <div class="muted small" id="todayLabel"></div>
+          </div>
+        </div>
+        <div class="row topbar-actions">
+          <button class="btn" id="topRefresh">↻ Refresh</button>
+          <div class="profile-menu" id="profileMenu">
+            <button class="profile-btn" id="profileButton" aria-haspopup="true" aria-expanded="false">
+              <div class="avatar">A</div>
+              <div class="profile-text">
+                <strong id="adminEmail" class="profile-email">Administrator</strong>
+                <span class="muted small">Store administrator</span>
+              </div>
+              <span class="chev">▾</span>
+            </button>
+            <div class="profile-dropdown hidden" id="profileDropdown">
+              <div class="profile-dropdown-head">
+                <strong class="wrap" id="adminEmailFull">Administrator</strong>
+                <span class="muted small">Store administrator</span>
+              </div>
+              <button class="dropdown-item danger" id="logoutButton"><span class="nav-icon">⇥</span>Log out</button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-let S = {orders: [], products: [], ratings: []}, tab = 'reports', range = 7, mode = 'daily', filter = 'all';
+      <div class="content">
+        <div id="globalMessage" class="notice hidden" style="margin-bottom:18px"></div>
 
-async function show(session) {
-  $('login').classList.toggle('hide', !!session);
-  $('app').classList.toggle('hide', !session);
-  if (session) load();
-}
+        <section id="page-dashboard" class="page">
+          <div class="page-heading">
+            <h1>Welcome back ✿</h1>
+            <p>Here's what's happening at your flower shop.</p>
+          </div>
 
-$('lf').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  $('le').textContent = '';
-  const {error} = await sb.auth.signInWithPassword({email: $('em').value.trim(), password: $('pw').value});
-  if (error) $('le').textContent = 'Wrong email or password.';
-});
-$('lo').onclick = () => sb.auth.signOut();
-$('rf').onclick = () => load();
-sb.auth.onAuthStateChange((_e, s) => show(s));
-sb.auth.getSession().then(({data}) => show(data.session));
+          <div class="grid stats-grid">
+            <div class="card stat-card">
+              <div class="row between"><span class="stat-label">Total sales</span><span class="stat-icon">₱</span></div>
+              <div class="stat-value" id="statSales">₱0.00</div>
+              <div class="stat-foot">Based on available order totals</div>
+            </div>
+            <div class="card stat-card">
+              <div class="row between"><span class="stat-label">Total orders</span><span class="stat-icon">▤</span></div>
+              <div class="stat-value" id="statOrders">0</div>
+              <div class="stat-foot">Orders loaded from database</div>
+            </div>
+            <div class="card stat-card">
+              <div class="row between"><span class="stat-label">Customers</span><span class="stat-icon">♙</span></div>
+              <div class="stat-value" id="statCustomers">0</div>
+              <div class="stat-foot">Unique identifiable customers</div>
+            </div>
+            <div class="card stat-card">
+              <div class="row between"><span class="stat-label">Average rating</span><span class="stat-icon">☆</span></div>
+              <div class="stat-value" id="statRating">—</div>
+              <div class="stat-foot" id="statReviewCount">Ratings available in database</div>
+            </div>
+          </div>
 
-document.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => {
-  tab = b.dataset.tab;
-  document.querySelectorAll('[data-tab]').forEach((x) => x.className = 'btn ' + (x === b ? 'on' : 'ghost'));
-  render();
-});
+          <div class="grid two-grid top-align">
+            <div class="card section-card">
+              <div class="card-head"><h3>Sales overview</h3><span class="legend"><i class="dot none"></i>0 sold<i class="dot low"></i>1–2 sold<i class="dot high"></i>3+ sold</span></div>
+              <div class="card-body">
+                <div class="chart-controls">
+                  <div class="seg" id="dashPeriodSeg">
+                    <button type="button" data-type="daily">Daily</button>
+                    <button type="button" data-type="weekly">Weekly</button>
+                    <button type="button" data-type="monthly" class="active">Monthly</button>
+                  </div>
+                  <div class="period-nav">
+                    <button type="button" class="btn small-btn" id="dashPrev" aria-label="Previous period">‹</button>
+                    <span id="dashRangeLabel" class="period-label"></span>
+                    <button type="button" class="btn small-btn" id="dashNext" aria-label="Next period">›</button>
+                  </div>
+                </div>
+                <div id="dashboardChart" class="chart-area"></div>
+                <div id="dashboardChartSummary" class="chart-summary"></div>
+                <div class="muted small" id="dashboardChartNote" style="margin-top:6px"></div>
+              </div>
+            </div>
+            <div class="card section-card">
+              <div class="card-head"><h3>Order status</h3></div>
+              <div class="card-body" id="statusBreakdown"></div>
+            </div>
+          </div>
 
-async function load() {
-  $('main').innerHTML = '<p class="mute">Loading...</p>';
-  const [o, p, r] = await Promise.all([
-    sb.from('orders').select('id,order_number,customer_name,total_amount,status,created_at,payment_reference,order_items(product_id,product_name,quantity,subtotal)').order('created_at', {ascending: false}),
-    sb.from('products').select('id,category'),
-    sb.rpc('get_ratings')
-  ]);
-  if (o.error) { $('main').innerHTML = '<p class="err">Could not load orders: ' + esc(o.error.message) + '</p>'; return; }
-  S = {orders: o.data || [], products: p.data || [], ratings: r.data || []};
-  render();
-}
+          <div class="card section-card">
+            <div class="card-head">
+              <h3>Recent transactions</h3>
+              <button class="btn small-btn" data-go="orders">View all orders →</button>
+            </div>
+            <div id="recentOrders"></div>
+          </div>
+        </section>
 
-function bar(label, v, max, right) {
-  return `<div class="bar"><div><b>${esc(label)}</b><span class="mute">${esc(right)}</span></div><i><u style="width:${max ? Math.max(v / max * 100, v > 0 ? 3 : 0) : 0}%"></u></i></div>`;
-}
-const stars = (n) => '<span class="star">' + '\u2605'.repeat(n) + '\u2606'.repeat(5 - n) + '</span>';
+        <section id="page-orders" class="page hidden">
+          <div class="page-heading">
+            <h1>Orders & Transactions</h1>
+            <p>Search transactions, inspect customer information, and view proof images. Order status is fixed to Completed in this admin view.</p>
+          </div>
 
-function render() {
-  if (tab === 'orders') return renderOrders();
-  if (tab === 'ratings') return renderRatings();
-  renderReports();
-}
+          <div class="grid two-grid">
+            <div class="card stat-card">
+              <div class="stat-label">All orders</div>
+              <div class="stat-value" id="orderCountAll">0</div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-label">Completed orders</div>
+              <div class="stat-value" id="orderCountComplete">0</div>
+            </div>
+          </div>
 
-function renderReports() {
-  const cat = {}; S.products.forEach((p) => cat[p.id] = p.category);
-  const now = new Date();
-  const since = range ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - (range - 1)) : null;
-  const valid = S.orders.filter((o) => o.status !== 'cancelled');
-  const rows = valid.filter((o) => !since || new Date(o.created_at) >= since);
-  let rev = 0, items = 0; const cats = {}, prods = {}, byDay = {};
-  const pay = {cash: {n: 0, a: 0}, gcash: {n: 0, a: 0}};
-  rows.forEach((o) => {
-    const a = Number(o.total_amount || 0), k = dkey(o.created_at);
-    const d = byDay[k] = byDay[k] || {date: k, n: 0, q: 0, cash: 0, gcash: 0, rev: 0};
-    const m = String(o.payment_reference || '').toUpperCase() === 'CASH' ? 'cash' : 'gcash';
-    rev += a; d.n++; d.rev += a; d[m] += a; pay[m].n++; pay[m].a += a;
-    (o.order_items || []).forEach((i) => {
-      const q = Number(i.quantity || 0); items += q; d.q += q;
-      const c = catOf(cat[i.product_id], i.product_name); cats[c] = (cats[c] || 0) + q;
-      const p = prods[i.product_name] = prods[i.product_name] || {n: i.product_name, q: 0, a: 0};
-      p.q += q; p.a += Number(i.subtotal || 0);
-    });
-  });
-  const daily = Object.values(byDay).sort((a, b) => a.date < b.date ? 1 : -1);
-  const weeks = {};
-  daily.forEach((r) => { const w = wk(r.date); const x = weeks[w] = weeks[w] || {date: w, n: 0, q: 0, cash: 0, gcash: 0, rev: 0}; ['n', 'q', 'cash', 'gcash', 'rev'].forEach((f) => x[f] += r[f]); });
-  const tbl = mode === 'daily' ? daily : Object.values(weeks).sort((a, b) => a.date < b.date ? 1 : -1);
+          <div class="card section-card">
+            <div class="toolbar">
+              <input class="search" id="orderSearch" placeholder="Search order number, customer, email..." />
+              <input class="filter" style="max-width:170px" type="date" id="orderDateFilter" title="Filter by order date" />
+              <button class="btn" id="clearOrderFilters">Clear filters</button>
+            </div>
+            <div id="ordersTable"></div>
+          </div>
+        </section>
 
-  const days = range === 1 ? 7 : range || 30, all = {};
-  valid.forEach((o) => { const k = dkey(o.created_at); all[k] = (all[k] || 0) + Number(o.total_amount || 0); });
-  const ch = [];
-  for (let i = days - 1; i >= 0; i--) { const k = dkey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)); ch.push([k, all[k] || 0]); }
-  const mx = Math.max(...ch.map((c) => c[1]), 1);
+        <section id="page-customers" class="page hidden">
+          <div class="page-heading">
+            <h1>Customers</h1>
+            <p>Customers identified from your existing orders. No separate customer table is required for this view.</p>
+          </div>
+          <div class="card">
+            <div class="toolbar"><input class="search" id="customerSearch" placeholder="Search customer name, email, phone..." /></div>
+            <div id="customersTable"></div>
+          </div>
+        </section>
 
-  const rt = S.ratings, avg = rt.length ? rt.reduce((s, r) => s + r.rating, 0) / rt.length : 0;
-  const cl = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  const top = Object.values(prods).sort((a, b) => b.q - a.q).slice(0, 5);
-  const pm = Math.max(pay.cash.a, pay.gcash.a);
+        <section id="page-feedback" class="page hidden">
+          <div class="page-heading">
+            <h1>Feedback & Ratings</h1>
+            <p>Customer comments and star ratings returned by your configured ratings source.</p>
+          </div>
+          <div class="grid stats-grid">
+            <div class="card stat-card"><div class="stat-label">Total reviews</div><div class="stat-value" id="feedbackTotal">0</div></div>
+            <div class="card stat-card"><div class="stat-label">Average rating</div><div class="stat-value" id="feedbackAverage">—</div></div>
+            <div class="card stat-card"><div class="stat-label">5-star reviews</div><div class="stat-value" id="feedbackFive">0</div></div>
+            <div class="card stat-card"><div class="stat-label">1-star reviews</div><div class="stat-value" id="feedbackOne">0</div></div>
+          </div>
+          <div class="toolbar" style="padding-left:0;padding-right:0">
+            <input class="search" id="feedbackSearch" placeholder="Search customer, order number, comment..." />
+            <select class="filter" id="feedbackRatingFilter">
+              <option value="">All ratings</option>
+              <option value="5">5 stars</option><option value="4">4 stars</option>
+              <option value="3">3 stars</option><option value="2">2 stars</option>
+              <option value="1">1 star</option>
+            </select>
+            <div class="row" style="gap:6px"><span class="muted small">From</span><input class="filter" style="max-width:160px" type="date" id="feedbackDateFrom" title="From date" /></div>
+            <div class="row" style="gap:6px"><span class="muted small">To</span><input class="filter" style="max-width:160px" type="date" id="feedbackDateTo" title="To date" /></div>
+            <button class="btn" id="clearFeedbackFilters">Clear filters</button>
+          </div>
+          <div id="feedbackGrid" class="grid two-grid"></div>
+        </section>
 
-  $('main').innerHTML = `
-  <div class="row" style="margin-bottom:18px">${[[1, 'Today'], [7, '7 days'], [30, '30 days'], [0, 'All time']].map(([v, l]) => `<button class="btn ${range === v ? 'on' : 'ghost'}" data-r="${v}">${l}</button>`).join('')}</div>
-  <div class="stats">
-    <div class="card stat"><span>Total sales</span><b>${peso(rev)}</b></div>
-    <div class="card stat"><span>Orders</span><b>${rows.length}</b></div>
-    <div class="card stat"><span>Items sold</span><b>${items}</b></div>
-    <div class="card stat"><span>Average per order</span><b>${peso(rows.length ? rev / rows.length : 0)}</b></div>
-    <div class="card stat"><span>Average rating</span><b>${rt.length ? avg.toFixed(1) + ' / 5' : '-'}</b></div>
+        <section id="page-reports" class="page hidden">
+          <div class="page-heading">
+            <h1>Sales Reports</h1>
+            <p>Choose a daily, weekly, or monthly report, view the graphs, and export the data to Excel.</p>
+          </div>
+          <div class="card">
+            <div class="toolbar" style="align-items:flex-end">
+              <div style="min-width:150px;max-width:190px;flex:1">
+                <label for="reportType">Report type</label>
+                <select id="reportType">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly" selected>Monthly</option>
+                </select>
+              </div>
+              <div id="reportMonthWrap" style="min-width:180px;max-width:240px;flex:1">
+                <label for="reportMonth">Report month</label>
+                <input id="reportMonth" type="month" />
+              </div>
+              <div id="reportDayWrap" class="hidden" style="min-width:180px;max-width:240px;flex:1">
+                <label for="reportDay" id="reportDayLabel">Report date</label>
+                <input id="reportDay" type="date" />
+              </div>
+              <button class="btn primary" id="generateReport">Generate report</button>
+              <button class="btn" id="exportExcel">↓ Export Excel (.xlsx)</button>
+            </div>
+            <div id="reportMessage" class="notice info" style="margin:0 20px 20px">
+              Reports use the orders currently accessible to this admin account. Weekly reports run Monday to Sunday. Confirm your database access policies if some orders are missing.
+            </div>
+          </div>
+
+          <div class="grid stats-grid section-card">
+            <div class="card stat-card"><div class="stat-label">Total sales</div><div class="stat-value" id="reportSales">₱0.00</div></div>
+            <div class="card stat-card"><div class="stat-label">Orders</div><div class="stat-value" id="reportOrders">0</div></div>
+            <div class="card stat-card"><div class="stat-label">Items sold</div><div class="stat-value" id="reportUnits">0</div></div>
+            <div class="card stat-card"><div class="stat-label">Average order value</div><div class="stat-value" id="reportAov">₱0.00</div></div>
+          </div>
+          <div class="grid stats-grid" style="margin-top:17px">
+            <div class="card stat-card"><div class="stat-label">Unique customers</div><div class="stat-value" id="reportCustomers">0</div></div>
+          </div>
+
+          <div class="grid two-grid top-align">
+            <div class="card section-card">
+              <div class="card-head"><h3 id="reportChartTitle">Daily sales</h3><span class="legend"><i class="dot none"></i>0 sold<i class="dot low"></i>1–2 sold<i class="dot high"></i>3+ sold</span></div>
+              <div class="card-body"><div id="reportChart" class="chart-area"></div><div class="muted small" id="reportChartNote" style="margin-top:10px"></div></div>
+            </div>
+            <div class="card section-card">
+              <div class="card-head"><h3>Best-selling products</h3></div>
+              <div class="card-body" id="bestSellers"></div>
+            </div>
+          </div>
+
+          <div class="card section-card">
+            <div class="card-head"><h3>Transaction records</h3><span class="muted small" id="reportRange"></span></div>
+            <div id="reportTable"></div>
+          </div>
+        </section>
+      </div>
+    </main>
   </div>
-  <div class="card" style="margin-bottom:22px"><h3>Daily sales, last ${days} days</h3>
-    <div class="chart">${ch.map(([k, v], i) => `<div title="${short(k)}: ${peso(v)}"><small>${v && days <= 14 ? Math.round(v) : ''}</small><u style="height:${Math.max(v / mx * 120, v ? 4 : 1)}px;${v ? '' : 'background:#1b3252'}"></u><small>${days <= 14 || i % 5 === 0 ? short(k) : ''}</small></div>`).join('')}</div></div>
-  <div class="grid">
-    <div class="card"><h3>Sold per category</h3>${cl.length ? cl.map(([n, q]) => bar(n, q, cl[0][1], q + ' pcs')).join('') : '<p class="mute">No sales in this range.</p>'}</div>
-    <div class="card"><h3>Best sellers</h3>${top.length ? top.map((p) => bar(p.n, p.q, top[0].q, p.q + ' pcs, ' + peso(p.a))).join('') : '<p class="mute">No sales in this range.</p>'}</div>
-    <div class="card"><h3>Payment method</h3>${bar('Cash', pay.cash.a, pm, pay.cash.n + ' orders, ' + peso(pay.cash.a))}${bar('GCash', pay.gcash.a, pm, pay.gcash.n + ' orders, ' + peso(pay.gcash.a))}</div>
+
+  <div id="orderModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div>
+          <h2 id="detailTitle">Order details</h2>
+          <div class="muted small" id="detailSubtitle">Complete transaction information</div>
+        </div>
+        <button class="close-btn" id="closeOrderModal" aria-label="Close details">×</button>
+      </div>
+      <div class="modal-content" id="orderDetailContent"></div>
+    </div>
   </div>
-  <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h3>Order record</h3>
-    <div class="row"><button class="btn ${mode === 'daily' ? 'on' : 'ghost'}" data-m="daily">Daily</button><button class="btn ${mode === 'weekly' ? 'on' : 'ghost'}" data-m="weekly">Weekly</button></div></div>
-    <div class="tw"><table><thead><tr><th>${mode === 'daily' ? 'Date' : 'Week of (Mon)'}</th><th>Orders</th><th>Items</th><th>Cash</th><th>GCash</th><th>Total</th></tr></thead><tbody>
-    ${tbl.length ? tbl.map((r) => `<tr><td>${pday(r.date).toLocaleDateString('en-PH', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'})}</td><td>${r.n}</td><td>${r.q}</td><td>${peso(r.cash)}</td><td>${peso(r.gcash)}</td><td class="t">${peso(r.rev)}</td></tr>`).join('') : '<tr><td colspan="6" class="mute">No orders in this range.</td></tr>'}</tbody></table></div></div>`;
-  document.querySelectorAll('[data-r]').forEach((b) => b.onclick = () => { range = +b.dataset.r; renderReports(); });
-  document.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => { mode = b.dataset.m; renderReports(); });
-}
 
-function renderOrders() {
-  const sts = ['all', 'pending', 'confirmed', 'completed', 'cancelled'];
-  const list = S.orders.filter((o) => filter === 'all' || o.status === filter);
-  $('main').innerHTML = `
-  <div class="row" style="margin-bottom:18px">${sts.map((s) => `<button class="btn ${filter === s ? 'on' : 'ghost'}" data-f="${s}">${s} (${s === 'all' ? S.orders.length : S.orders.filter((o) => o.status === s).length})</button>`).join('')}</div>
-  <div class="ords">${list.length ? list.map((o) => `
-    <div class="ord"><div class="row"><b>${esc(o.order_number)}</b><span class="pill ${esc(o.status)}">${esc(o.status)}</span></div>
-      <div>${esc(o.customer_name)} <span class="mute">${new Date(o.created_at).toLocaleString('en-PH')}</span></div>
-      <ul>${(o.order_items || []).map((i) => `<li>${esc(i.product_name)} x ${esc(i.quantity)}</li>`).join('')}</ul>
-      <div class="row" style="justify-content:space-between"><b>${peso(o.total_amount)} <span class="mute">${String(o.payment_reference || '').toUpperCase() === 'CASH' ? 'Cash' : 'GCash'}</span></b>
-      <select data-id="${esc(o.id)}" aria-label="Order status">${sts.slice(1).map((s) => `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>`).join('') : '<p class="mute">No orders found.</p>'}</div>`;
-  document.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { filter = b.dataset.f; renderOrders(); });
-  document.querySelectorAll('select[data-id]').forEach((s) => s.onchange = async () => {
-    const {error} = await sb.from('orders').update({status: s.value}).eq('id', s.dataset.id);
-    if (error) alert('Could not update: ' + error.message); else load();
-  });
-}
+  <div id="logoutModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
+    <div class="modal-panel" style="width:min(400px,100%)">
+      <div class="modal-content" style="text-align:center">
+        <div class="brand-mark" style="margin:0 auto 14px">⇥</div>
+        <h2 id="logoutTitle" style="margin:0 0 8px;font-size:19px">Log out?</h2>
+        <p class="muted" style="margin:0 0 22px">Are you sure you want to log out of the admin panel?</p>
+        <div class="row" style="justify-content:center">
+          <button class="btn" id="cancelLogout">Cancel</button>
+          <button class="btn primary" id="confirmLogout">Yes, log out</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-function renderRatings() {
-  const rt = S.ratings, dist = [0, 0, 0, 0, 0];
-  rt.forEach((r) => dist[r.rating - 1]++);
-  const avg = rt.length ? rt.reduce((s, r) => s + r.rating, 0) / rt.length : 0;
-  $('main').innerHTML = !rt.length ? '<p class="mute">No ratings yet. They appear here after customers rate their order.</p>' : `
-  <div class="grid"><div class="card"><div style="font-size:2.4rem;font-weight:700;color:var(--gold)">${avg.toFixed(1)} <span class="mute">/ 5</span></div>${stars(Math.round(avg))}
-    <p class="mute">${rt.length} ratings</p>${[5, 4, 3, 2, 1].map((n) => bar(n + ' stars', dist[n - 1], Math.max(...dist), dist[n - 1])).join('')}</div>
-  <div style="grid-column:span 2;display:grid;gap:12px;align-content:start">${rt.map((r) => `<div class="card">${stars(r.rating)} <span class="mute">${new Date(r.created_at).toLocaleDateString('en-PH', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
-    <div><b>${esc(r.customer_name)}</b> <span class="mute">${esc(r.order_number)}</span></div><p style="margin:6px 0 0;color:${r.comment ? 'var(--ink)' : 'var(--mute)'}">${esc(r.comment || 'No comment')}</p></div>`).join('')}</div></div>`;
-}
-</script>
+  <div id="toast" class="hidden" role="status"></div>
+
+<script src="admen.js"></script>
 </body>
 </html>

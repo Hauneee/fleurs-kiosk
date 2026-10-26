@@ -1,10 +1,10 @@
+
 import React from 'react';
 import { BackButton } from './BackButton';
 import { CartButton } from './CartButton';
 import { ButterflySvg } from './Decorations';
 import { Sliders } from 'lucide-react';
 
-// Responsive rules that inline styles cannot express
 const headerCss = `
   .fl-hdr-title {
     margin: 0;
@@ -16,6 +16,7 @@ const headerCss = `
     font-size: clamp(0.95rem, 4.6vw, 2.5rem);
     letter-spacing: clamp(0.01em, 0.4vw, 0.05em);
   }
+
   .fl-hdr-title-row {
     display: flex;
     align-items: center;
@@ -23,11 +24,15 @@ const headerCss = `
     gap: clamp(4px, 1.5vw, 14px);
     max-width: 100%;
   }
+
   .fl-hdr-butterfly {
     pointer-events: none;
   }
+
   @media (max-width: 600px) {
-    .fl-hdr-butterfly { display: none !important; }
+    .fl-hdr-butterfly {
+      display: none !important;
+    }
   }
 `;
 
@@ -38,8 +43,11 @@ export const Header = ({
   cartCount = 0,
   onAdmin,
   isConnected = null,
-  showCart = true
+  showCart = true,
+  variant = 'dark'
 }) => {
+  const light = variant === 'light';
+
   return (
     <header
       style={{
@@ -59,7 +67,7 @@ export const Header = ({
     >
       <style>{headerCss}</style>
 
-      {/* Left Slot: Back Button (same width as the right slot, so the title stays centered) */}
+      {/* Left: Back button */}
       <div
         style={{
           flex: '1 1 0',
@@ -72,7 +80,7 @@ export const Header = ({
         {onBack && <BackButton onClick={onBack} />}
       </div>
 
-      {/* Center Slot: Title */}
+      {/* Center: Title */}
       <div
         style={{
           flex: '0 1 auto',
@@ -85,44 +93,62 @@ export const Header = ({
         }}
       >
         <div className="fl-hdr-title-row">
-          <ButterflySvg
-            style={{ width: 'clamp(16px, 5vw, 36px)', height: 'auto', opacity: 0.85, flexShrink: 0 }}
-            className="animate-float fl-hdr-butterfly"
-          />
+          {!light && (
+            <ButterflySvg
+              style={{
+                width: 'clamp(16px, 5vw, 36px)',
+                height: 'auto',
+                opacity: 0.85,
+                flexShrink: 0
+              }}
+              className="animate-float fl-hdr-butterfly"
+            />
+          )}
+
           <h1
             className="fl-hdr-title"
             style={{
               fontFamily: 'var(--font-serif)',
-              fontWeight: 800,
-              color: '#ffffff',
-              textShadow: '0 4px 14px rgba(0, 0, 0, 0.45)',
-              textTransform: 'uppercase'
+              fontWeight: light ? 700 : 800,
+              color: light ? '#684854' : '#ffffff',
+              textShadow: light
+                ? 'none'
+                : '0 4px 14px rgba(0, 0, 0, 0.45)',
+              textTransform: light ? 'none' : 'uppercase'
             }}
           >
             {title}
           </h1>
-          <ButterflySvg
-            style={{
-              width: 'clamp(16px, 5vw, 36px)',
-              height: 'auto',
-              opacity: 0.85,
-              transform: 'scaleX(-1)',
-              flexShrink: 0
-            }}
-            className="animate-float-delayed fl-hdr-butterfly"
-          />
+
+          {!light && (
+            <ButterflySvg
+              style={{
+                width: 'clamp(16px, 5vw, 36px)',
+                height: 'auto',
+                opacity: 0.85,
+                transform: 'scaleX(-1)',
+                flexShrink: 0
+              }}
+              className="animate-float-delayed fl-hdr-butterfly"
+            />
+          )}
         </div>
+
+        {/* Pink decorative line */}
         <div
           style={{
             width: 'clamp(60px, 20vw, 120px)',
-            height: '3px',
-            background: 'linear-gradient(90deg, transparent, #93c5fd, transparent)',
+            height: '2px',
+            background: light
+              ? 'linear-gradient(90deg, transparent, #e9a3b5, transparent)'
+              : 'linear-gradient(90deg, transparent, #e9a3b5, transparent)',
+            borderRadius: '999px',
             marginTop: '6px'
           }}
         />
       </div>
 
-      {/* Right Slot: Cart and discreet Admin portal */}
+      {/* Right: Cart and admin */}
       <div
         style={{
           flex: '1 1 0',
@@ -134,11 +160,17 @@ export const Header = ({
       >
         {onAdmin && (
           <button
+            type="button"
             onClick={onAdmin}
             title="Staff / Admin Dashboard"
+            aria-label="Staff Portal"
             style={{
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1.5px dashed rgba(147, 197, 253, 0.5)',
+              background: light
+                ? 'rgba(233, 163, 181, 0.12)'
+                : 'rgba(255, 255, 255, 0.08)',
+              border: light
+                ? '1.5px solid #e9a3b5'
+                : '1.5px solid rgba(233, 163, 181, 0.5)',
               borderRadius: '50%',
               width: '40px',
               height: '40px',
@@ -146,16 +178,17 @@ export const Header = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#93c5fd',
+              color: light ? '#c96f8b' : '#e9a3b5',
               cursor: 'pointer'
             }}
-            aria-label="Staff Portal"
           >
             <Sliders size={20} />
           </button>
         )}
 
-        {showCart && onCart && <CartButton onClick={onCart} count={cartCount} />}
+        {showCart && onCart && (
+          <CartButton onClick={onCart} count={cartCount} />
+        )}
       </div>
     </header>
   );

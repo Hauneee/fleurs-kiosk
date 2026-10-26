@@ -1,80 +1,146 @@
+
 import React from 'react';
-import { CheckCircle2, Clock, XCircle, PackageCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  Clock,
+  XCircle,
+  PackageCheck
+} from 'lucide-react';
+
+const COLORS = {
+  pink: '#E879A5',
+  lightPink: '#F8C9DA',
+  blush: '#FCE7EF',
+  darkPink: '#C2255C',
+  wine: '#9C1A47',
+  darkText: '#3F1424',
+  mutedText: '#806B73',
+  white: '#FFFFFF',
+  cream: '#FFFAFC',
+};
 
 export const OrderCard = ({ order, onStatusChange }) => {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'pending':
         return {
-          bg: '#fef3c7',
-          color: '#92400e',
-          border: '#f59e0b',
+          bg: '#FFF0F5',
+          color: '#9C1A47',
+          border: '#E879A5',
           icon: <Clock size={16} />
         };
+
       case 'confirmed':
         return {
-          bg: '#dbeafe',
-          color: '#1e40af',
-          border: '#3b82f6',
+          bg: '#FCE7EF',
+          color: '#9C1A47',
+          border: '#C2255C',
           icon: <CheckCircle2 size={16} />
         };
+
       case 'completed':
         return {
-          bg: '#dcfce7',
-          color: '#166534',
-          border: '#22c55e',
+          bg: '#F0F5EB',
+          color: '#496B42',
+          border: '#A7C9A0',
           icon: <PackageCheck size={16} />
         };
+
       case 'cancelled':
         return {
-          bg: '#fee2e2',
-          color: '#991b1b',
-          border: '#ef4444',
+          bg: '#FFF0F0',
+          color: '#9B303D',
+          border: '#E6A0A7',
           icon: <XCircle size={16} />
         };
+
       default:
         return {
-          bg: '#f1f5f9',
-          color: '#334155',
-          border: '#94a3b8',
+          bg: '#F8F1F4',
+          color: '#684854',
+          border: '#D9C1CB',
           icon: <Clock size={16} />
         };
     }
   };
 
   const badge = getStatusBadge(order.status);
-  const formattedDate = new Date(order.created_at).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  });
+
+  const formattedDate = new Date(
+  order.created_at
+).toLocaleString('en-PH', {
+  timeZone: 'Asia/Manila',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true
+});
+  const formatAmount = (amount) =>
+    Number(amount || 0).toLocaleString('en-PH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+  const buttonStyle = {
+    color: COLORS.white,
+    border: 'none',
+    padding: '10px 18px',
+    borderRadius: '9999px',
+    fontWeight: 700,
+    fontSize: '0.9rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    whiteSpace: 'nowrap',
+  };
 
   return (
     <div
       style={{
-        background: '#ffffff',
-        border: '2.5px dashed #93c5fd',
+        boxSizing: 'border-box',
+        width: '100%',
+        background: COLORS.white,
+        border: `2px dashed ${COLORS.lightPink}`,
         borderRadius: '24px',
-        padding: '24px',
-        boxShadow: '0 8px 24px rgba(10, 25, 52, 0.12)',
+        padding: 'clamp(16px, 3vw, 24px)',
+        boxShadow: '0 8px 24px rgba(156, 26, 71, 0.08)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px'
+        gap: '16px',
+        color: COLORS.darkText,
       }}
     >
-      {/* Top Header: Order Number & Status Badge */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span
+      {/* Order number and status */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
             style={{
               fontFamily: 'var(--font-serif)',
-              fontSize: '1.6rem',
+              fontSize: 'clamp(1.2rem, 3vw, 1.6rem)',
               fontWeight: 800,
-              color: '#0d2547'
+              color: COLORS.darkText,
+              overflowWrap: 'anywhere',
             }}
           >
             ORDER {order.order_number}
-          </span>
-          <div style={{ fontSize: '0.9rem', color: '#64748b', marginTop: '2px' }}>
+          </div>
+
+          <div
+            style={{
+              fontSize: '0.9rem',
+              color: COLORS.mutedText,
+              marginTop: '4px',
+            }}
+          >
             {formattedDate}
           </div>
         </div>
@@ -84,14 +150,15 @@ export const OrderCard = ({ order, onStatusChange }) => {
             background: badge.bg,
             color: badge.color,
             border: `1.5px solid ${badge.border}`,
-            padding: '6px 14px',
+            padding: '6px 12px',
             borderRadius: '9999px',
-            fontSize: '0.95rem',
+            fontSize: '0.8rem',
             fontWeight: 800,
             textTransform: 'uppercase',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px'
+            gap: '6px',
+            flexShrink: 0,
           }}
         >
           {badge.icon}
@@ -99,15 +166,15 @@ export const OrderCard = ({ order, onStatusChange }) => {
         </span>
       </div>
 
-      {/* Item List */}
+      {/* Order items */}
       <div
         style={{
-          borderTop: '1px dashed #cbd5e1',
-          borderBottom: '1px dashed #cbd5e1',
+          borderTop: `1px dashed ${COLORS.lightPink}`,
+          borderBottom: `1px dashed ${COLORS.lightPink}`,
           padding: '12px 0',
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px'
+          gap: '10px',
         }}
       >
         {(order.order_items || []).map((item, index) => (
@@ -116,51 +183,91 @@ export const OrderCard = ({ order, onStatusChange }) => {
             style={{
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '1.05rem',
-              color: '#1e293b'
+              alignItems: 'flex-start',
+              gap: '12px',
+              fontSize: '1rem',
+              color: COLORS.darkText,
             }}
           >
-            <span style={{ fontWeight: 600 }}>
-              {item.product_name} <span style={{ color: '#3b82f6', fontWeight: 800 }}>× {item.quantity}</span>
+            <span style={{ fontWeight: 600, minWidth: 0 }}>
+              {item.product_name || item.name}
+              <span
+                style={{
+                  color: COLORS.darkPink,
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {' '}× {item.quantity}
+              </span>
             </span>
-            <span style={{ fontWeight: 700, color: '#0f172a' }}>
-              ₱{Number(item.subtotal || item.unit_price * item.quantity).toLocaleString()}
+
+            <span
+              style={{
+                fontWeight: 700,
+                color: COLORS.darkText,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ₱
+              {formatAmount(
+                item.subtotal ??
+                (Number(item.unit_price) * Number(item.quantity))
+              )}
             </span>
           </div>
         ))}
       </div>
 
-      {/* Total & Action Buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Total and status actions */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap',
+        }}
+      >
         <div>
-          <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 700 }}>TOTAL AMOUNT:</span>
+          <span
+            style={{
+              fontSize: '0.85rem',
+              color: COLORS.mutedText,
+              fontWeight: 700,
+            }}
+          >
+            TOTAL AMOUNT
+          </span>
+
           <div
             style={{
               fontFamily: 'var(--font-serif)',
-              fontSize: '1.75rem',
+              fontSize: 'clamp(1.4rem, 4vw, 1.75rem)',
               fontWeight: 800,
-              color: '#1e3a8a'
+              color: COLORS.wine,
+              overflowWrap: 'anywhere',
             }}
           >
-            ₱{Number(order.total_amount).toLocaleString()}
+            ₱{formatAmount(order.total_amount)}
           </div>
         </div>
 
-        {/* Status transition controls */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+          }}
+        >
           {order.status === 'pending' && (
             <button
+              type="button"
               onClick={() => onStatusChange(order.id, 'confirmed')}
               style={{
-                background: '#3b82f6',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 18px',
-                borderRadius: '9999px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: 'pointer'
+                ...buttonStyle,
+                background: COLORS.darkPink,
               }}
             >
               CONFIRM ORDER
@@ -169,39 +276,33 @@ export const OrderCard = ({ order, onStatusChange }) => {
 
           {order.status === 'confirmed' && (
             <button
+              type="button"
               onClick={() => onStatusChange(order.id, 'completed')}
               style={{
-                background: '#16a34a',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 18px',
-                borderRadius: '9999px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: 'pointer'
+                ...buttonStyle,
+                background: '#6B8F60',
               }}
             >
               MARK COMPLETED
             </button>
           )}
 
-          {order.status !== 'cancelled' && order.status !== 'completed' && (
-            <button
-              onClick={() => onStatusChange(order.id, 'cancelled')}
-              style={{
-                background: '#fee2e2',
-                color: '#b91c1c',
-                border: '1px solid #fca5a5',
-                padding: '10px 14px',
-                borderRadius: '9999px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: 'pointer'
-              }}
-            >
-              CANCEL
-            </button>
-          )}
+          {order.status !== 'cancelled' &&
+            order.status !== 'completed' && (
+              <button
+                type="button"
+                onClick={() => onStatusChange(order.id, 'cancelled')}
+                style={{
+                  ...buttonStyle,
+                  background: COLORS.blush,
+                  color: COLORS.wine,
+                  border: `1px solid ${COLORS.lightPink}`,
+                  padding: '10px 14px',
+                }}
+              >
+                CANCEL
+              </button>
+            )}
         </div>
       </div>
     </div>

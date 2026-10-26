@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -9,133 +10,256 @@ import { setPaymentInfo } from '../utils/paymentInfo';
 import { supabase } from '../services/supabase';
 
 const PAY_REF_KEY = 'fleurs_pay_ref';
-const QR_LIFETIME = 600; // each QR lasts 10 minutes, then a new one is made
+const PAY_METHOD_KEY = 'fleurs_payment_method';
+const QR_LIFETIME = 600;
 
-export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
-  const [method, setMethod] = useState('gcash'); // 'gcash' | 'cash'
+const COLORS = {
+  pink: '#E9A3B5',
+  pinkDark: '#C2255C',
+  cream: '#FFF8F8',
+  white: '#FFFFFF',
+  text: '#684854',
+  muted: '#8E5368',
+  border: '#F0D5DE',
+  gcash: '#007DFE',
+  cash: '#D94F7D',
+  warningBg: '#FFF1F4',
+  warningText: '#8B5969',
+  errorBg: '#FFF0F0',
+  errorText: '#A34455'
+};
+
+export const PaymentPage = ({
+  cart = [],
+  totalAmount,
+  onBack,
+  onPaid
+}) => {
+  const [method, setMethod] = useState('gcash');
   const [cashReceived, setCashReceived] = useState('');
-
-  // Dynamic QR (PayMongo)
-  const [qr, setQr] = useState(null); // { id, image, testUrl }
-  const [qrState, setQrState] = useState('loading'); // loading | ready | failed
+  const [qr, setQr] = useState(null);
+  const [qrState, setQrState] = useState('loading');
   const [attempt, setAttempt] = useState(0);
-  const paidRef = useRef(false);
-  const intentsRef = useRef([]); // every QR made in this visit
   const [secondsLeft, setSecondsLeft] = useState(QR_LIFETIME);
+
+  const paidRef = useRef(false);
+  const intentsRef = useRef([]);
 
   useEffect(() => {
     scrollToTop();
     sessionStorage.removeItem(PAY_REF_KEY);
+    sessionStorage.removeItem(PAY_METHOD_KEY);
   }, []);
 
-  // Ask the server for a QR with the exact cart total
+  // Remember the selected payment method for the checkout flow.
+  useEffect(() => {
+    sessionStorage.setItem(PAY_METHOD_KEY, method);
+  }, [method]);
+
+  // Generate a GCash payment QR.
   useEffect(() => {
     if (method !== 'gcash') return;
+
     let cancelled = false;
+
     setQr(null);
     setQrState('loading');
 
     (async () => {
       try {
-        if (!supabase) throw new Error('Supabase is not configured');
-        const { data, error } = await supabase.functions.invoke('paymongo-qr', {
-          body: {
-            action: 'create',
-            items: cart.map((i) => ({
-              product_id: i.product_id || i.id,
-              quantity: i.quantity
-            }))
-          }
-        });
-        if (error || !data?.qr_image) {
-          throw new Error(error?.message || data?.error || 'No QR returned');
+        if (!supabase) {
+          throw new Error('Supabase is not configured.');
         }
+
+        const { data, error } = await supabase.functions.invoke(
+          'paymongo-qr',
+          {
+            body: {
+              action: 'create',
+              items: cart.map((item) => ({
+                product_id: item.product_id || item.id,
+                quantity: item.quantity
+              }))
+            }
+          }
+        );
+
+        if (error || !data?.qr_image || !data?.payment_intent_id) {
+          throw new Error(
+            error?.message || data?.error || 'No QR returned.'
+          );
+        }
+
         intentsRef.current.push(data.payment_intent_id);
+
         if (!cancelled) {
-          setQr({ id: data.payment_intent_id, image: data.qr_image, testUrl: data.test_url });
+          setQr({
+            id: data.payment_intent_id,
+            image: data.qr_image,
+            testUrl: data.test_url
+          });
           setQrState('ready');
         }
-      } catch (e) {
-        console.warn('Could not create a payment QR, using the shop QR instead:', e);
-        if (!cancelled) setQrState('failed');
+      } catch (error) {
+        console.warn('Could not create payment QR:', error);
+
+        if (!cancelled) {
+          setQrState('failed');
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method, attempt]);
+  }, [method, attempt, cart]);
 
-  // Check every 2 seconds if the QR has been paid
+  // Check GCash payment status.
   useEffect(() => {
-    if (method !== 'gcash' || qrState !== 'ready' || !qr) return;
-    const timer = setInterval(async () => {
+    if (method !== 'gcash' || qrState !== 'ready' || !qr) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkPayment = async () => {
       if (paidRef.current) return;
-      // check this QR and the last few older ones (an old QR may be paid late)
+
       for (const id of intentsRef.current.slice(-5)) {
         try {
-          const { data } = await supabase.functions.invoke('paymongo-qr', {
-            body: { action: 'status', payment_intent_id: id }
-          });
+          const { data, error } = await supabase.functions.invoke(
+            'paymongo-qr',
+            {
+              body: {
+                action: 'status',
+                payment_intent_id: id
+              }
+            }
+          );
+
+          if (cancelled) return;
+          if (error) continue;
+
           if (data?.status === 'succeeded' && !paidRef.current) {
             paidRef.current = true;
+
             sessionStorage.setItem(PAY_REF_KEY, id);
-            setPaymentInfo({ method: 'gcash' });
+            sessionStorage.setItem(PAY_METHOD_KEY, 'gcash');
+
+            setPaymentInfo({
+              method: 'gcash',
+              paymentIntentId: id
+            });
+
             onPaid();
             return;
           }
-        } catch (e) {
-          // keep checking
+        } catch (error) {
+          // Continue checking payment status.
         }
       }
-    }, 2000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method, qrState, qr]);
+    };
 
-  // 10 minute countdown for the QR on screen
+    const timer = setInterval(checkPayment, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [method, qrState, qr, onPaid]);
+
+  // QR countdown.
   useEffect(() => {
     if (method !== 'gcash' || qrState !== 'ready') return;
+
     setSecondsLeft(QR_LIFETIME);
-    const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
+
+    const timer = setInterval(() => {
+      setSecondsLeft((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, [method, qrState, qr]);
 
-  // time is up: make a new QR automatically
+  // Generate a fresh QR when the current one expires.
   useEffect(() => {
-    if (method === 'gcash' && qrState === 'ready' && secondsLeft <= 0) {
-      setAttempt((n) => n + 1);
+    if (
+      method === 'gcash' &&
+      qrState === 'ready' &&
+      secondsLeft <= 0
+    ) {
+      setAttempt((number) => number + 1);
     }
   }, [secondsLeft, method, qrState]);
 
-  const received = parseFloat(cashReceived) || 0;
-  const change = received - totalAmount;
-  const cashEnough = received >= totalAmount;
+  const received = Number.parseFloat(cashReceived) || 0;
+  const amount = Number(totalAmount) || 0;
+  const change = received - amount;
+  const cashEnough = received >= amount;
   const showConfirmButton = method === 'cash';
-  const canConfirm = cashEnough;
+  const canConfirm = amount > 0 && cashEnough && !paidRef.current;
 
-  const quickAmounts = [totalAmount, 100, 200, 500, 1000].filter(
-    (v, i, arr) => v >= totalAmount && arr.indexOf(v) === i
-  );
+  const quickAmounts = [...new Set([amount, 100, 200, 500, 1000])]
+    .filter((value) => value >= amount);
 
   const handleConfirm = () => {
-    if (!canConfirm) return;
-    setPaymentInfo({ method: 'cash', cashReceived: received, change });
+    if (!canConfirm || paidRef.current) return;
+
+    paidRef.current = true;
+
+    sessionStorage.setItem(PAY_METHOD_KEY, 'cash');
+    sessionStorage.removeItem(PAY_REF_KEY);
+
+    setPaymentInfo({
+      method: 'cash',
+      cashReceived: received,
+      change
+    });
+
     onPaid();
   };
 
-  const tabStyle = (active) => ({
-    flex: 1,
-    padding: '14px 10px',
-    fontSize: '1.2rem',
+  const tabStyle = (active, paymentMethod) => {
+    const isGCash = paymentMethod === 'gcash';
+    const activeColor = isGCash ? COLORS.gcash : COLORS.cash;
+
+    return {
+      flex: 1,
+      minHeight: '58px',
+      padding: '14px 10px',
+      fontSize: '1.15rem',
+      fontWeight: 800,
+      borderRadius: '14px',
+      border: `2px solid ${active ? activeColor : '#E8C7D1'}`,
+      cursor: 'pointer',
+      background: active ? activeColor : COLORS.white,
+      color: active ? COLORS.white : activeColor,
+      boxShadow: active
+        ? `0 5px 14px ${
+            isGCash
+              ? 'rgba(0, 125, 254, 0.25)'
+              : 'rgba(217, 79, 125, 0.25)'
+          }`
+        : 'none',
+      opacity: 1,
+      transition: 'background 0.2s ease, box-shadow 0.2s ease'
+    };
+  };
+
+  const utilityButtonStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    minHeight: '46px',
+    padding: '10px 18px',
+    borderRadius: '12px',
+    border: `2px solid ${COLORS.border}`,
+    background: COLORS.white,
+    color: COLORS.pinkDark,
     fontWeight: 800,
-    borderRadius: '14px',
-    border: '2px dashed #60a5fa',
-    cursor: 'pointer',
-    background: active ? '#1d4ed8' : '#fff',
-    color: active ? '#fff' : '#1d4ed8'
-  });
+    cursor: 'pointer'
+  };
 
   return (
     <div
@@ -145,13 +269,20 @@ export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
         flexDirection: 'column',
         minHeight: '100vh',
         position: 'relative',
-        paddingBottom: '72px'
+        paddingBottom: '40px',
+        background: COLORS.cream,
+        color: COLORS.text
       }}
     >
       <FloralCorner position="top-left" />
       <FloralCorner position="top-right" />
 
-      <Header title="PAYMENT" onBack={onBack} showCart={false} />
+      <Header
+        title="Payment"
+        onBack={onBack}
+        showCart={false}
+        variant="light"
+      />
 
       <main
         style={{
@@ -159,72 +290,139 @@ export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
           width: '100%',
           maxWidth: '760px',
           margin: '0 auto',
-          padding: '8px 24px',
+          padding: '12px 20px 28px',
+          boxSizing: 'border-box',
+          position: 'relative',
           zIndex: 10
         }}
       >
         <div
-          className="stitch-panel"
+          className="stitch-panel payment-panel"
           style={{
-            padding: '26px 32px 32px 32px',
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: 'clamp(20px, 4vw, 32px)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '16px',
-            textAlign: 'center'
+            gap: '22px',
+            textAlign: 'center',
+            background: COLORS.white,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: '24px',
+            boxShadow: '0 12px 32px rgba(155, 65, 97, 0.12)'
           }}
         >
           <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-            <button style={tabStyle(method === 'gcash')} onClick={() => setMethod('gcash')}>
+            <button
+              type="button"
+              aria-pressed={method === 'gcash'}
+              style={tabStyle(method === 'gcash', 'gcash')}
+              onClick={() => setMethod('gcash')}
+            >
               GCash
             </button>
-            <button style={tabStyle(method === 'cash')} onClick={() => setMethod('cash')}>
+
+            <button
+              type="button"
+              aria-pressed={method === 'cash'}
+              style={tabStyle(method === 'cash', 'cash')}
+              onClick={() => setMethod('cash')}
+            >
               Cash
             </button>
           </div>
 
-          <div>
+          <div style={{ width: '100%' }}>
             <div
               style={{
-                fontSize: '1.05rem',
+                fontSize: '0.95rem',
                 fontWeight: 800,
-                color: '#3b5a82',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase'
+                color: '#000',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                marginBottom: '6px'
               }}
             >
               Total Amount
             </div>
+
             <div
               style={{
-                fontFamily: 'var(--font-serif)',
-                fontSize: '3rem',
+                fontFamily: 'var(--font-serif, Georgia, serif)',
+                fontSize: 'clamp(2.3rem, 8vw, 3rem)',
                 fontWeight: 800,
-                color: '#1d4ed8',
-                lineHeight: 1.1
+                color: '#000',
+                lineHeight: 1.15,
+                overflowWrap: 'anywhere'
               }}
             >
-              {formatPeso(totalAmount)}
+              {formatPeso(amount)}
             </div>
           </div>
 
           {method === 'gcash' ? (
             <>
-              <div className="payment-qr-frame">
+              <div
+                className="payment-qr-frame"
+                style={{
+                  width: 'min(82vw, 340px)',
+                  aspectRatio: '1 / 1',
+                  boxSizing: 'border-box',
+                  padding: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  background: COLORS.white,
+                  border: `2px solid ${COLORS.pink}`,
+                  borderRadius: '20px',
+                  boxShadow: '0 8px 24px rgba(201, 111, 139, 0.12)'
+                }}
+              >
                 {qrState === 'loading' && (
-                  <div className="payment-qr-missing">
-                    <Loader2 size={44} className="animate-spin" color="#1d4ed8" />
+                  <div
+                    style={{
+                      color: COLORS.pinkDark,
+                      fontWeight: 700,
+                      lineHeight: 1.6
+                    }}
+                  >
+                    <Loader2
+                      size={44}
+                      className="animate-spin"
+                      color={COLORS.gcash}
+                    />
                     <br />
                     Preparing your QR code...
                   </div>
                 )}
 
                 {qrState === 'ready' && qr && (
-                  <img src={qr.image} alt="Payment QR code" draggable={false} />
+                  <img
+                    src={qr.image}
+                    alt="Payment QR code"
+                    draggable={false}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '100%',
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
                 )}
 
                 {qrState === 'failed' && (
-                  <div className="payment-qr-missing">
+                  <div
+                    style={{
+                      color: COLORS.pinkDark,
+                      fontWeight: 700,
+                      lineHeight: 1.6
+                    }}
+                  >
                     QR code unavailable.
                     <br />
                     Please try again or pay in cash.
@@ -232,12 +430,40 @@ export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
                 )}
               </div>
 
-              <div>
-                <p style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0d2547', marginBottom: '6px' }}>
-                  Scan with GCash. The amount is already set in the QR.
+              <div style={{ width: '100%' }}>
+                <p
+                  style={{
+                    fontSize: '1.1rem',
+                    lineHeight: 1.5,
+                    fontWeight: 800,
+                    color: '#000',
+                    margin: '0 0 8px'
+                  }}
+                >
+                  Scan with GCash
                 </p>
-                <p style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e40af' }}>
-                  Amount to Pay: {formatPeso(totalAmount)}
+
+                <p
+                  style={{
+                    fontSize: '1rem',
+                    lineHeight: 1.5,
+                    fontWeight: 700,
+                    color: '#000',
+                    margin: 0
+                  }}
+                >
+                  The amount is already set in the QR.
+                </p>
+
+                <p
+                  style={{
+                    fontSize: '1.15rem',
+                    fontWeight: 800,
+                    color: '#000',
+                    margin: '12px 0 0'
+                  }}
+                >
+                  Amount to Pay: {formatPeso(amount)}
                 </p>
               </div>
 
@@ -246,50 +472,64 @@ export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'center',
+                    flexWrap: 'wrap',
                     gap: '10px',
-                    fontSize: '1.1rem',
+                    fontSize: '0.95rem',
                     fontWeight: 700,
-                    color: '#1e40af'
+                    color: '#000'
                   }}
                 >
-                  <Loader2 size={22} className="animate-spin" />
-                  Waiting for your payment... new QR in {String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:{String(secondsLeft % 60).padStart(2, '0')}
+                  <Loader2
+                    size={20}
+                    className="animate-spin"
+                    color="#000"
+                  />
+                  <span>
+                    Waiting for payment · New QR in{' '}
+                    {String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:
+                    {String(secondsLeft % 60).padStart(2, '0')}
+                  </span>
                 </div>
               )}
 
               {qrState === 'ready' && (
                 <button
-                  onClick={() => setAttempt((n) => n + 1)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 16px',
-                    borderRadius: '12px',
-                    border: '2px dashed #60a5fa',
-                    background: '#fff',
-                    color: '#1d4ed8',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
+                  type="button"
+                  onClick={() => setAttempt((number) => number + 1)}
+                  style={utilityButtonStyle}
                 >
-                  <RefreshCw size={18} /> Get a new QR
+                  <RefreshCw size={18} />
+                  Get a new QR
                 </button>
               )}
 
               {qrState === 'ready' && qr?.testUrl && (
                 <div
                   style={{
-                    padding: '10px 14px',
-                    borderRadius: '12px',
-                    background: '#fef9c3',
-                    color: '#854d0e',
-                    fontSize: '0.95rem',
-                    fontWeight: 700
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '12px 14px',
+                    borderRadius: '14px',
+                    background: COLORS.warningBg,
+                    color: COLORS.warningText,
+                    border: `1px solid ${COLORS.border}`,
+                    fontSize: '0.9rem',
+                    lineHeight: 1.5,
+                    fontWeight: 700,
+                    overflowWrap: 'anywhere'
                   }}
                 >
                   TEST MODE: do not scan with a real GCash.{' '}
-                  <a href={qr.testUrl} target="_blank" rel="noreferrer" style={{ color: '#1d4ed8' }}>
+                  <a
+                    href={qr.testUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      color: COLORS.pinkDark,
+                      textDecorationColor: COLORS.pink
+                    }}
+                  >
                     Click here to simulate payment
                   </a>
                 </div>
@@ -297,86 +537,156 @@ export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
 
               {qrState === 'failed' && (
                 <button
-                  onClick={() => setAttempt((n) => n + 1)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 18px',
-                    borderRadius: '12px',
-                    border: '2px dashed #60a5fa',
-                    background: '#fff',
-                    color: '#1d4ed8',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
+                  type="button"
+                  onClick={() => setAttempt((number) => number + 1)}
+                  style={utilityButtonStyle}
                 >
-                  <RefreshCw size={18} /> Try again
+                  <RefreshCw size={18} />
+                  Try again
                 </button>
               )}
             </>
           ) : (
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <p style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0d2547' }}>
-                Pay in cash to the staff.
-              </p>
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}
+            >
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: '16px',
+                  background: '#FFF1F5',
+                  border: '1px solid #F5D1DD'
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '1.15rem',
+                    fontWeight: 800,
+                    color: COLORS.text,
+                    margin: '0 0 6px'
+                  }}
+                >
+                  Cash Payment
+                </p>
 
-              <label style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e40af' }}>
-                Cash Received
+                <p
+                  style={{
+                    fontSize: '0.95rem',
+                    lineHeight: 1.5,
+                    color: COLORS.muted,
+                    margin: 0
+                  }}
+                >
+                  Enter the amount received from the customer.
+                </p>
+              </div>
+
+              <label
+                htmlFor="cash-received"
+                style={{
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  color: COLORS.pinkDark,
+                  textAlign: 'left'
+                }}
+              >
+                Cash Received (₱)
               </label>
+
               <input
+                id="cash-received"
                 type="number"
                 inputMode="decimal"
                 min="0"
                 value={cashReceived}
-                onChange={(e) => setCashReceived(e.target.value)}
+                onChange={(event) => setCashReceived(event.target.value)}
                 placeholder="0.00"
                 style={{
-                  fontSize: '2rem',
+                  fontSize: 'clamp(1.7rem, 6vw, 2rem)',
                   fontWeight: 800,
                   textAlign: 'center',
-                  padding: '12px',
+                  padding: '14px',
                   borderRadius: '14px',
-                  border: '2px dashed #60a5fa',
-                  color: '#0d2547',
+                  border: `2px solid ${COLORS.pink}`,
+                  color: COLORS.text,
+                  background: COLORS.white,
                   width: '100%',
                   boxSizing: 'border-box'
                 }}
               />
 
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {quickAmounts.map((amt) => (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center'
+                }}
+              >
+                {quickAmounts.map((value) => (
                   <button
-                    key={amt}
-                    onClick={() => setCashReceived(String(amt))}
+                    type="button"
+                    key={value}
+                    onClick={() => setCashReceived(String(value))}
                     style={{
+                      minHeight: '44px',
                       padding: '10px 16px',
-                      fontSize: '1.05rem',
+                      fontSize: '1rem',
                       fontWeight: 800,
                       borderRadius: '12px',
-                      border: '2px dashed #60a5fa',
-                      background: '#fff',
-                      color: '#1d4ed8',
+                      border: `2px solid ${COLORS.border}`,
+                      background: COLORS.white,
+                      color: '#000',
                       cursor: 'pointer'
                     }}
                   >
-                    {amt === totalAmount ? 'Exact' : formatPeso(amt)}
+                    {value === amount ? 'Exact' : formatPeso(value)}
                   </button>
                 ))}
               </div>
 
-              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e40af' }}>
-                Amount to Pay: {formatPeso(totalAmount)}
+              <div
+                style={{
+                  fontSize: '1.1rem',
+                  fontWeight: 800,
+                  color: COLORS.pinkDark
+                }}
+              >
+                Amount to Pay: {formatPeso(amount)}
               </div>
 
               <div
+                aria-live="polite"
                 style={{
-                  padding: '14px',
-                  borderRadius: '14px',
-                  background: cashEnough ? '#dcfce7' : '#fee2e2',
-                  color: cashEnough ? '#166534' : '#991b1b',
-                  fontSize: '1.6rem',
-                  fontWeight: 800
+                  padding: '16px',
+                  borderRadius: '16px',
+                  background:
+                    received === 0
+                      ? COLORS.warningBg
+                      : cashEnough
+                      ? '#EAF8EE'
+                      : COLORS.errorBg,
+                  color:
+                    received === 0
+                      ? COLORS.warningText
+                      : cashEnough
+                      ? '#246B3B'
+                      : COLORS.errorText,
+                  border: `1px solid ${
+                    received === 0
+                      ? '#F1D5DC'
+                      : cashEnough
+                      ? '#B7E2C1'
+                      : '#F1C5C5'
+                  }`,
+                  fontSize: 'clamp(1.15rem, 4vw, 1.4rem)',
+                  fontWeight: 800,
+                  overflowWrap: 'anywhere'
                 }}
               >
                 {received === 0
@@ -389,19 +699,23 @@ export const PaymentPage = ({ cart = [], totalAmount, onBack, onPaid }) => {
           )}
 
           {showConfirmButton && (
-            <Button
-              variant="accent"
-              size="xl"
-              className="checkout-btn-full"
-              onClick={handleConfirm}
-              disabled={!canConfirm}
-              icon={<CheckCircle2 size={28} />}
-            >
-              CONFIRM CASH PAYMENT
-            </Button>
+            <div style={{ width: '100%' }}>
+              <Button
+                variant="accent"
+                size="xl"
+                className="checkout-btn-full"
+                onClick={handleConfirm}
+                disabled={!canConfirm}
+                icon={<CheckCircle2 size={24} />}
+              >
+                CONFIRM CASH PAYMENT
+              </Button>
+            </div>
           )}
         </div>
       </main>
     </div>
   );
 };
+
+export default PaymentPage;

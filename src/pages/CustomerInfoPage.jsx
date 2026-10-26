@@ -1,71 +1,168 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
-import { FloralCorner } from '../components/Decorations';
 import { scrollToTop } from '../utils/scrollToTop';
-import { User, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
+import {
+  User,
+  Mail,
+  Phone,
+  ArrowRight,
+  AlertTriangle,
+} from 'lucide-react';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import '../styles/light.css';
+import '../styles/customer-info.css';
+
+const EMAIL_PATTERN =
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$/;
+
+const NAME_PATTERN =
+  /^\p{L}+(?:[ '-]\p{L}+)*$/u;
+
+const PHONE_PATTERN = /^09\d{9}$/;
+
+const COMMON_GMAIL_TYPOS = [
+  'gmai.com',
+  'gmial.com',
+  'gamil.com',
+  'gmal.com',
+  'gmail.con',
+  'gmail.co',
+  'gmail.om',
+  'gmail.comm',
+  'gmaill.com',
+  'gmail.cmo',
+  'gmil.com',
+  'g-mail.com',
+];
 
 const FIELDS = [
   {
     key: 'name',
-    label: 'Name',
+    label: 'Full Name',
     type: 'text',
     placeholder: 'Your full name',
     Icon: User,
     autoComplete: 'name',
     inputMode: 'text',
-    maxLength: 100
+    maxLength: 100,
   },
   {
     key: 'email',
-    label: 'Email',
+    label: 'Email Address',
     type: 'email',
-    placeholder: 'name@email.com',
+    placeholder: 'name@gmail.com',
     Icon: Mail,
     autoComplete: 'email',
     inputMode: 'email',
-    maxLength: 254
+    maxLength: 254,
   },
   {
     key: 'phone',
     label: 'Phone Number',
     type: 'tel',
-    placeholder: '09XX XXX XXXX',
+    placeholder: '09XXXXXXXXX',
     Icon: Phone,
     autoComplete: 'tel',
-    inputMode: 'tel',
-    maxLength: 30
-  }
+    inputMode: 'numeric',
+    maxLength: 11,
+  },
 ];
+
+const capitalizeName = (value) => {
+  return value
+    .toLocaleLowerCase()
+    .replace(
+      /(^|[ '-])(\p{L})/gu,
+      (_, separator, letter) =>
+        separator + letter.toLocaleUpperCase()
+    );
+};
+
+const normalizeName = (value) => {
+  const cleaned = value
+    .replace(/[^\p{L} '-]/gu, '')
+    .replace(/\s{2,}/g, ' ');
+
+  return capitalizeName(cleaned);
+};
+
+const getEmailError = (value) => {
+  const email = value.trim();
+
+  if (!email) {
+    return 'Please enter your email address.';
+  }
+
+  if (/\s/.test(email)) {
+    return 'Your email address must not contain spaces.';
+  }
+
+  if (!EMAIL_PATTERN.test(email)) {
+    return 'Please enter a valid email address.';
+  }
+
+  const domain = email.split('@')[1]?.toLowerCase();
+
+  if (domain === 'gmail.com') {
+    return '';
+  }
+
+  if (COMMON_GMAIL_TYPOS.includes(domain)) {
+    return 'Did you mean gmail.com? Please check your email.';
+  }
+
+  return '';
+};
 
 const validate = (values) => {
   const errors = {};
 
-  if (!values.name.trim()) {
-    errors.name = 'Please enter your name.';
+  const name = values.name.trim();
+  const email = values.email.trim();
+  const phone = values.phone.trim();
+
+  if (!name) {
+    errors.name = 'Please enter your full name.';
+  } else if (name.length < 2) {
+    errors.name = 'Your name must contain at least 2 characters.';
+  } else if (!NAME_PATTERN.test(name)) {
+    errors.name =
+      'Use letters, spaces, hyphens, or apostrophes only.';
   }
 
-  if (!values.email.trim()) {
-    errors.email = 'Please enter your email address.';
-  } else if (!EMAIL_PATTERN.test(values.email.trim())) {
-    errors.email = 'Please enter a valid email address (example: name@email.com).';
+  const emailError = getEmailError(email);
+
+  if (emailError) {
+    errors.email = emailError;
   }
 
-  if (!values.phone.trim()) {
+  if (!phone) {
     errors.phone = 'Please enter your phone number.';
+  } else if (!/^09/.test(phone)) {
+    errors.phone = 'Your number must start with 09.';
+  } else if (!/^\d+$/.test(phone)) {
+    errors.phone = 'Your phone number must contain digits only.';
+  } else if (!PHONE_PATTERN.test(phone)) {
+    errors.phone = 'Enter exactly 11 digits, starting with 09.';
   }
 
   return errors;
 };
 
-export const CustomerInfoPage = ({ initialValues, onBack, onContinue }) => {
+export const CustomerInfoPage = ({
+  initialValues,
+  onBack,
+  onContinue,
+}) => {
   const [values, setValues] = useState({
-    name: initialValues?.name || '',
+    name: capitalizeName(initialValues?.name || ''),
     email: initialValues?.email || '',
-    phone: initialValues?.phone || ''
+    phone: (initialValues?.phone || '')
+      .replace(/\D/g, '')
+      .slice(0, 11),
   });
+
   const [errors, setErrors] = useState({});
   const [attempted, setAttempted] = useState(false);
 
@@ -73,146 +170,226 @@ export const CustomerInfoPage = ({ initialValues, onBack, onContinue }) => {
     scrollToTop();
   }, []);
 
-  const handleChange = (key) => (e) => {
-    const next = { ...values, [key]: e.target.value };
-    setValues(next);
-    // After the first attempt, keep messages up to date while typing
+  const handleChange = (key) => (event) => {
+    let value = event.target.value;
+
+    if (key === 'name') {
+      value = normalizeName(value).slice(0, 100);
+    }
+
+    if (key === 'email') {
+      value = value.replace(/\s/g, '').slice(0, 254);
+    }
+
+    if (key === 'phone') {
+      value = value.replace(/\D/g, '').slice(0, 11);
+    }
+
+    const nextValues = {
+      ...values,
+      [key]: value,
+    };
+
+    setValues(nextValues);
+
     if (attempted) {
-      setErrors(validate(next));
+      setErrors(validate(nextValues));
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = (event) => {
+    event.preventDefault();
     setAttempted(true);
 
-    const found = validate(values);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    const foundErrors = validate(values);
+    setErrors(foundErrors);
+
+    if (Object.keys(foundErrors).length > 0) {
+      return;
+    }
+
+    if (typeof onContinue !== 'function') {
+      console.error(
+        'CustomerInfoPage: onContinue callback is missing.'
+      );
+      return;
+    }
 
     onContinue({
-      name: values.name.trim(),
+      name: capitalizeName(values.name.trim()),
       email: values.email.trim(),
       phone: values.phone.trim(),
-      section: 'N/A'
+      section: 'N/A',
     });
   };
 
-  const hasErrors = Object.keys(errors).length > 0;
+  const hasErrors = Object.values(errors).some(Boolean);
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        position: 'relative',
-        paddingBottom: '72px'
-      }}
-    >
-      <FloralCorner position="top-left" />
-      <FloralCorner position="top-right" />
+    <div className="fl-light fl-page customer-info-page">
+      <Header />
 
-      <Header title="CUSTOMER INFO" onBack={onBack} showCart={false} />
+      <main className="customer-info-container">
+        <section className="customer-info-card">
+          <div className="customer-info-heading">
+            <span className="customer-info-eyebrow">
+              YOUR DETAILS
+            </span>
 
-      <main
-        style={{
-          flex: 1,
-          width: '100%',
-          maxWidth: '820px',
-          margin: '0 auto',
-          padding: '8px 24px',
-          zIndex: 10
-        }}
-      >
-        <form
-          className="stitch-panel"
-          noValidate
-          onSubmit={handleSubmit}
-          style={{
-            padding: '32px 36px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '22px'
-          }}
-        >
-          <div style={{ textAlign: 'center' }}>
-            <h2
-              style={{
-                fontFamily: 'var(--font-serif)',
-                fontSize: '2rem',
-                fontWeight: 800,
-                color: '#0d2547',
-                marginBottom: '6px'
-              }}
-            >
-              Tell us about you
-            </h2>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, color: '#3b5a82' }}>
-              All three fields are required.
+            <h1>Let's get to know you</h1>
+
+            <p>
+              Enter your contact information so we can prepare
+              your flower order.
             </p>
           </div>
 
-          {attempted && hasErrors && (
-            <div className="checkout-banner" role="alert">
-              <AlertTriangle size={24} style={{ flexShrink: 0 }} />
-              <span>Please complete all required fields correctly to continue.</span>
+          {hasErrors && attempted && (
+            <div
+              className="customer-info-banner"
+              role="alert"
+            >
+              <AlertTriangle size={19} />
+
+              <span>
+                Please check the highlighted fields before
+                continuing.
+              </span>
             </div>
           )}
 
-          {FIELDS.map((field) => {
-            const Icon = field.Icon;
-            const fieldError = errors[field.key];
-            const inputId = `checkout-${field.key}`;
-
-            return (
-              <div className="checkout-field" key={field.key}>
-                <label className="checkout-label" htmlFor={inputId}>
-                  {field.label}
-                </label>
-                <div className="checkout-input-wrap">
-                  <span className="checkout-input-icon">
-                    <Icon size={26} />
-                  </span>
-                  <input
-                    id={inputId}
-                    className={`checkout-input${fieldError ? ' has-error' : ''}`}
-                    type={field.type}
-                    inputMode={field.inputMode}
-                    autoComplete={field.autoComplete}
-                    autoCapitalize={field.key === 'email' ? 'none' : 'words'}
-                    autoCorrect="off"
-                    spellCheck={false}
-                    maxLength={field.maxLength}
-                    placeholder={field.placeholder}
-                    value={values[field.key]}
-                    onChange={handleChange(field.key)}
-                    aria-invalid={fieldError ? 'true' : 'false'}
-                    aria-describedby={fieldError ? `${inputId}-error` : undefined}
-                  />
-                </div>
-                {fieldError && (
-                  <div className="checkout-error" id={`${inputId}-error`} role="alert">
-                    <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-                    <span>{fieldError}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          <Button
-            type="submit"
-            variant="accent"
-            size="xl"
-            className="checkout-btn-full"
-            icon={<ArrowRight size={26} />}
+          <form
+            className="customer-info-form"
+            onSubmit={handleSubmit}
+            noValidate
           >
-            CONTINUE TO PAYMENT
-          </Button>
-        </form>
+            {FIELDS.map(
+              ({
+                key,
+                label,
+                type,
+                placeholder,
+                Icon,
+                autoComplete,
+                inputMode,
+                maxLength,
+              }) => {
+                const fieldError = errors[key];
+
+                return (
+                  <div
+                    className="customer-info-field"
+                    key={key}
+                  >
+                    <label htmlFor={`customer-${key}`}>
+                      {label}
+                    </label>
+
+                    <div
+                      className={`customer-info-input-wrap ${
+                        fieldError ? 'has-error' : ''
+                      }`}
+                    >
+                      <Icon
+                        className="customer-info-input-icon"
+                        size={20}
+                        aria-hidden="true"
+                      />
+
+                      <input
+                        id={`customer-${key}`}
+                        name={key}
+                        type={type}
+                        value={values[key]}
+                        onChange={handleChange(key)}
+                        placeholder={placeholder}
+                        autoComplete={autoComplete}
+                        inputMode={inputMode}
+                        maxLength={maxLength}
+                        aria-invalid={Boolean(fieldError)}
+                        aria-describedby={
+                          fieldError
+                            ? `customer-${key}-error`
+                            : `customer-${key}-hint`
+                        }
+                      />
+                    </div>
+
+                    {key === 'name' && !fieldError && (
+                      <p
+                        className="customer-info-hint"
+                        id="customer-name-hint"
+                      >
+                        Name capitalization is applied
+                        automatically.
+                      </p>
+                    )}
+
+                    {key === 'email' && !fieldError && (
+                      <p
+                        className="customer-info-hint"
+                        id="customer-email-hint"
+                      >
+                        Use an email address you can access.
+                      </p>
+                    )}
+
+                    {key === 'phone' && !fieldError && (
+                      <p
+                        className="customer-info-hint"
+                        id="customer-phone-hint"
+                      >
+                        Enter 11 digits, starting with 09.
+                      </p>
+                    )}
+
+                    {fieldError && (
+                      <p
+                        className="customer-info-error"
+                        id={`customer-${key}-error`}
+                        role="alert"
+                      >
+                        <AlertTriangle
+                          size={15}
+                          aria-hidden="true"
+                        />
+                        {fieldError}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+            )}
+
+            <div className="customer-info-actions">
+              {typeof onBack === 'function' && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onBack}
+                >
+                  Back
+                </Button>
+              )}
+
+              {/* Centered Continue text and arrow */}
+              <Button
+  type="submit"
+  variant="primary"
+  className="customer-info-continue-btn"
+>
+  Continue
+</Button>
+            </div>
+          </form>
+
+          <p className="customer-info-footer">
+            Your information will be used to process your order.
+          </p>
+        </section>
       </main>
     </div>
   );
 };
+
+export default CustomerInfoPage;

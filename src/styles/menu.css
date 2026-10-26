@@ -1,0 +1,298 @@
+/* Menu page: everything is scoped to .fl-menu so other pages are not affected */
+.fl-menu {
+  --fl-white: #ffffff;
+  --fl-blush: #fdeff2;
+  --fl-rose: #c2255c;
+  --fl-rose-dark: #9c1a47;
+  --fl-wine: #3f1424;
+  --fl-muted: #7a5a66;
+
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background: linear-gradient(180deg, var(--fl-blush) 0%, var(--fl-white) 38%);
+  color: var(--fl-wine);
+}
+
+.fl-menu__main {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 20px 56px;
+  text-align: center;
+}
+
+.fl-menu__title {
+  margin: 0 0 8px;
+  font-family: var(--font-serif, Georgia, 'Times New Roman', serif);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--fl-wine);
+}
+
+.fl-menu__lead {
+  margin: 0 auto 36px;
+  max-width: 46ch;
+  font-size: clamp(1rem, 2.2vw, 1.2rem);
+  line-height: 1.5;
+  color: var(--fl-muted);
+}
+
+.fl-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.fl-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid #f1d5dc;
+  border-radius: 20px;
+  background: var(--fl-white);
+  overflow: hidden;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(194, 37, 92, 0.1);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fl-card:active {
+  transform: scale(0.98);
+}
+
+.fl-card:focus-visible {
+  outline: 3px solid var(--fl-rose);
+  outline-offset: 3px;
+}
+
+.fl-card__photo {
+  display: block;
+  aspect-ratio: 1 / 1;
+  background: var(--fl-blush);
+}
+
+.fl-card__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fl-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  padding: 18px 20px 22px;
+}
+
+.fl-card__name {
+  font-family: var(--font-serif, Georgia, 'Times New Roman', serif);
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--fl-wine);
+}
+
+.fl-card__desc {
+  flex: 1;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--fl-muted);
+}
+
+.fl-card__cta {
+  margin-top: 12px;
+  display: block;
+  padding: 14px 18px;
+  border-radius: 999px;
+  background: var(--fl-rose);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (hover: hover) {
+  .fl-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 36px rgba(194, 37, 92, 0.18);
+  }
+  .fl-card:hover .fl-card__cta {
+    background: var(--fl-rose-dark);
+  }
+}
+
+/* Tablet and phone: one card per row, photo beside the text */
+@media (max-width: 860px) {
+  .fl-menu__grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .fl-card {
+    flex-direction: row;
+  }
+  .fl-card__photo {
+    flex: 0 0 42%;
+    aspect-ratio: auto;
+    min-height: 190px;
+  }
+  .fl-card__body {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .fl-card {
+    flex-direction: column;
+  }
+  .fl-card__photo {
+    flex: none;
+    aspect-ratio: 4 / 3;
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-card {
+    transition: none;
+  }
+}
+
+/* Consistent flower image backgrounds and responsive sizing */
+
+.fl-card {
+  min-width: 0;
+  overflow: hidden;
+  background: #ffffff !important;
+}
+
+.fl-card__photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  overflow: hidden;
+  padding: 10px;
+  box-sizing: border-box;
+  background: #ffffff !important;
+}
+
+.fl-card__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
+  background-color: #ffffff;
+}
+
+/* Laptop and desktop */
+.fl-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .fl-menu__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+/* Mobile phones */
+@media (max-width: 600px) {
+  .fl-menu__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .fl-card {
+    width: 100%;
+    max-width: 420px;
+    margin-inline: auto;
+  }
+
+  .fl-card__photo {
+    aspect-ratio: 4 / 3;
+    padding: 8px;
+  }
+
+  .fl-card__body {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+/* Same image box size for all flower categories */
+.fl-menu__category-image,
+.fl-menu__category img,
+.fl-menu__card img {
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+/* Keep all category cards aligned */
+.fl-menu__category,
+.fl-menu__card {
+  display: flex;
+  flex-direction: column;
+}
+/* Consistent flower image display */
+.fl-product-image {
+  width: 250px;
+  height: 330px;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  background: #fff;
+  margin: 0 auto;
+}
+
+/* FIX: Make flower photos use the same white image area */
+.product-card .image-frame {
+  width: 100%;
+  height: 330px;
+  aspect-ratio: auto;
+  padding: 0;
+  background: #ffffff !important;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.product-card .image-frame img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  background: #ffffff !important;
+  display: block;
+  filter: none;
+}
+
+/* Keep the image area consistent on phones */
+@media (max-width: 480px) {
+  .product-card .image-frame {
+    height: 220px;
+  }
+}

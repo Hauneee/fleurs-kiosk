@@ -1,4 +1,16 @@
+
 import React from 'react';
+
+const COLORS = {
+  pink: '#E879A5',
+  lightPink: '#F8C9DA',
+  blush: '#FCE7EF',
+  darkPink: '#C2255C',
+  wine: '#9C1A47',
+  white: '#FFFFFF',
+  leaf: '#A7C9A0',
+  lightLeaf: '#D5E6CE',
+};
 
 export const ButterflySvg = ({ className = '', style = {} }) => (
   <svg
@@ -7,39 +19,42 @@ export const ButterflySvg = ({ className = '', style = {} }) => (
     style={{ width: '48px', height: '38px', ...style }}
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
   >
-    {/* Left Forewing */}
     <path
       d="M48 42 C15 5 2 20 12 50 C22 70 44 54 48 44 Z"
-      fill="#93c5fd"
-      stroke="#60a5fa"
-      strokeWidth="2.5"
+      fill={COLORS.lightPink}
+      stroke={COLORS.darkPink}
+      strokeWidth="2"
     />
     <path
       d="M48 46 C28 50 18 68 34 76 C44 79 48 60 48 46 Z"
-      fill="#bfdbfe"
-      stroke="#60a5fa"
+      fill={COLORS.pink}
+      stroke={COLORS.darkPink}
       strokeWidth="2"
     />
-    {/* Right Forewing */}
     <path
       d="M52 42 C85 5 98 20 88 50 C78 70 56 54 52 44 Z"
-      fill="#93c5fd"
-      stroke="#60a5fa"
-      strokeWidth="2.5"
+      fill={COLORS.lightPink}
+      stroke={COLORS.darkPink}
+      strokeWidth="2"
     />
     <path
       d="M52 46 C72 50 82 68 66 76 C56 79 52 60 52 46 Z"
-      fill="#bfdbfe"
-      stroke="#60a5fa"
+      fill={COLORS.pink}
+      stroke={COLORS.darkPink}
       strokeWidth="2"
     />
-    {/* Body */}
-    <ellipse cx="50" cy="45" rx="3" ry="18" fill="#1e3a8a" />
-    <circle cx="50" cy="27" r="4" fill="#1e3a8a" />
-    {/* Antennae */}
-    <path d="M49 26 Q 42 14 36 12" stroke="#1e3a8a" strokeWidth="2" strokeLinecap="round" />
-    <path d="M51 26 Q 58 14 64 12" stroke="#1e3a8a" strokeWidth="2" strokeLinecap="round" />
+    <ellipse cx="50" cy="45" rx="3" ry="18" fill={COLORS.wine} />
+    <circle cx="50" cy="27" r="4" fill={COLORS.wine} />
+    <path
+      d="M49 26 Q42 14 36 12 M51 26 Q58 14 64 12"
+      stroke={COLORS.wine}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <circle cx="28" cy="34" r="3" fill={COLORS.white} opacity=".8" />
+    <circle cx="72" cy="34" r="3" fill={COLORS.white} opacity=".8" />
   </svg>
 );
 
@@ -50,19 +65,32 @@ export const BowSvg = ({ className = '', style = {} }) => (
     style={{ width: '56px', height: '34px', ...style }}
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Pink ribbon bow"
   >
-    {/* Tails */}
-    <path d="M45 35 Q 25 55 10 58 Q 20 40 40 32 Z" fill="#2563eb" />
-    <path d="M55 35 Q 75 55 90 58 Q 80 40 60 32 Z" fill="#2563eb" />
-    {/* Loops */}
+    {/* Ribbon tails */}
+    <path
+      d="M45 35 Q25 55 10 58 Q20 40 40 32 Z"
+      fill={COLORS.pink}
+      stroke={COLORS.darkPink}
+      strokeWidth="1"
+    />
+    <path
+      d="M55 35 Q75 55 90 58 Q80 40 60 32 Z"
+      fill={COLORS.pink}
+      stroke={COLORS.darkPink}
+      strokeWidth="1"
+    />
+
+    {/* Ribbon loops */}
     <ellipse
       cx="30"
       cy="24"
       rx="24"
       ry="14"
       transform="rotate(-18 30 24)"
-      fill="#60a5fa"
-      stroke="#bfdbfe"
+      fill={COLORS.lightPink}
+      stroke={COLORS.darkPink}
       strokeWidth="2"
     />
     <ellipse
@@ -71,12 +99,21 @@ export const BowSvg = ({ className = '', style = {} }) => (
       rx="24"
       ry="14"
       transform="rotate(18 70 24)"
-      fill="#60a5fa"
-      stroke="#bfdbfe"
+      fill={COLORS.pink}
+      stroke={COLORS.darkPink}
       strokeWidth="2"
     />
-    {/* Center Knot */}
-    <circle cx="50" cy="26" r="10" fill="#1d4ed8" stroke="#bfdbfe" strokeWidth="2" />
+
+    {/* Center knot */}
+    <circle
+      cx="50"
+      cy="26"
+      r="10"
+      fill={COLORS.darkPink}
+      stroke={COLORS.lightPink}
+      strokeWidth="2"
+    />
+    <circle cx="47" cy="23" r="2" fill={COLORS.white} />
   </svg>
 );
 
@@ -86,6 +123,7 @@ export const FloralCorner = ({ position = 'top-left' }) => {
 
   return (
     <div
+      aria-hidden="true"
       style={{
         position: 'absolute',
         top: isBottom ? 'auto' : '12px',
@@ -94,22 +132,45 @@ export const FloralCorner = ({ position = 'top-left' }) => {
         right: isRight ? '12px' : 'auto',
         transform: `scale(${isRight ? -1 : 1}, ${isBottom ? -1 : 1})`,
         pointerEvents: 'none',
-        opacity: 0.6,
-        zIndex: 1
+        opacity: 0.55,
+        zIndex: 1,
       }}
     >
-      <svg width="80" height="80" viewBox="0 0 100 100" fill="none">
+      <svg
+        width="80"
+        height="80"
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {/* Curved floral stem */}
         <path
-          d="M10 90 Q 20 40 70 20 Q 90 15 95 10"
-          stroke="#93c5fd"
+          d="M10 90 Q20 40 70 20 Q90 15 95 10"
+          stroke={COLORS.pink}
           strokeWidth="3"
-          strokeDasharray="6,4"
+          strokeDasharray="6 4"
+          strokeLinecap="round"
         />
-        <circle cx="70" cy="20" r="10" fill="#60a5fa" opacity="0.8" />
-        <circle cx="45" cy="45" r="8" fill="#93c5fd" opacity="0.7" />
-        <circle cx="20" cy="70" r="7" fill="#bfdbfe" opacity="0.6" />
-        <path d="M70 20 Q 60 5 75 0 Q 80 15 70 20" fill="#3b82f6" />
-        <path d="M45 45 Q 35 30 50 25 Q 55 40 45 45" fill="#3b82f6" />
+
+        {/* Pink blossoms */}
+        <circle cx="70" cy="20" r="10" fill={COLORS.pink} />
+        <circle cx="45" cy="45" r="8" fill={COLORS.lightPink} />
+        <circle cx="20" cy="70" r="7" fill={COLORS.blush} />
+
+        {/* Green leaves */}
+        <path
+          d="M70 20 Q60 5 75 0 Q80 15 70 20"
+          fill={COLORS.leaf}
+        />
+        <path
+          d="M45 45 Q35 30 50 25 Q55 40 45 45"
+          fill={COLORS.lightLeaf}
+        />
+
+        {/* Small floral centers */}
+        <circle cx="70" cy="20" r="3" fill={COLORS.white} />
+        <circle cx="45" cy="45" r="2.5" fill={COLORS.white} />
+        <circle cx="20" cy="70" r="2" fill={COLORS.white} />
       </svg>
     </div>
   );

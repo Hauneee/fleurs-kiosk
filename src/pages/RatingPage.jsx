@@ -4,6 +4,50 @@ import { supabase } from "../services/supabase";
 const FLOWER = "\u{1F338}";
 const STAR = "\u2605";
 
+// One star that can be tapped on its left half (x.5) or right half (whole)
+function Star({ index, value, onPick, onHover }) {
+  const fill = value - index; // how much of this star is lit
+  const pct = fill >= 1 ? 100 : fill >= 0.5 ? 50 : 0;
+
+  const valueAt = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const leftHalf = e.clientX - r.left < r.width / 2;
+    return index + (leftHalf ? 0.5 : 1);
+  };
+
+  return (
+    <span
+      role="button"
+      aria-label={`Rate ${index + 1} stars`}
+      onClick={(e) => onPick(valueAt(e))}
+      onPointerMove={(e) => e.pointerType === "mouse" && onHover(valueAt(e))}
+      onPointerLeave={() => onHover(0)}
+      style={{
+        position: "relative",
+        display: "inline-block",
+        cursor: "pointer",
+        lineHeight: 1,
+        touchAction: "manipulation",
+      }}
+    >
+      <span style={{ color: "#d1d5db" }}>{STAR}</span>
+      <span
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: `${pct}%`,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          color: "#f59e0b",
+        }}
+      >
+        {STAR}
+      </span>
+    </span>
+  );
+}
+
 export function RatingPage({ token: tokenProp, onDone }) {
   const token =
     tokenProp || new URLSearchParams(window.location.search).get("rate");
@@ -13,6 +57,8 @@ export function RatingPage({ token: tokenProp, onDone }) {
   const [comment, setComment] = useState("");
   const [status, setStatus] = useState("idle"); // idle | sending | done | error
   const [errMsg, setErrMsg] = useState("");
+
+  const shown = hover || rating;
 
   const goHome = () => {
     if (onDone) onDone();
@@ -128,22 +174,20 @@ export function RatingPage({ token: tokenProp, onDone }) {
           <h2 style={{ color: ink, margin: "0 0 6px" }}>Rate your order</h2>
           <p style={{ color: "#6b7280", margin: 0 }}>How was your flower?</p>
 
-          <div style={{ fontSize: 44, margin: "14px 0" }}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <span
-                key={n}
-                onClick={() => { setRating(n); setHover(0); }}
-                onPointerEnter={(e) => e.pointerType === "mouse" && setHover(n)}
-                onPointerLeave={() => setHover(0)}
-                style={{
-                  cursor: "pointer",
-                  color: n <= (hover || rating) ? "#f59e0b" : "#d1d5db",
-                }}
-              >
-                {STAR}
-              </span>
+          <div style={{ fontSize: 44, margin: "14px 0 4px", userSelect: "none" }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Star
+                key={i}
+                index={i}
+                value={shown}
+                onPick={(v) => { setRating(v); setHover(0); }}
+                onHover={setHover}
+              />
             ))}
           </div>
+          <p style={{ color: "#6b7280", margin: "0 0 14px", minHeight: 22 }}>
+            {shown ? `${shown} / 5` : "Tap the left half of a star for a half rating"}
+          </p>
 
           <textarea
             value={comment}

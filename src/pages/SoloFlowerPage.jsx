@@ -4,8 +4,9 @@ import { ProductGrid } from '../components/ProductGrid';
 import { ProductModal } from '../components/ProductModal';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { FloralCorner } from '../components/Decorations';
 import { fetchProducts } from '../services/supabase';
+import '../styles/shop.css';
+import '../styles/light.css';
 
 export const SoloFlowerPage = ({
   onBack,
@@ -19,7 +20,7 @@ export const SoloFlowerPage = ({
   const [error, setError] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const loadSoloFlowers = async () => {
+  const loadProducts = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -34,36 +35,25 @@ export const SoloFlowerPage = ({
   };
 
   useEffect(() => {
-    loadSoloFlowers();
+    loadProducts();
   }, []);
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        position: 'relative'
-      }}
-    >
-      <FloralCorner position="top-left" />
-      <FloralCorner position="top-right" />
-
-      {/* Top Header */}
+    <div className="fl-shop fl-light">
       <Header
-        title="SOLO FLOWER"
+        title="Solo flower"
+        variant="light"
         onBack={onBack}
         onCart={onCart}
         cartCount={cartCount}
         onAdmin={onAdmin}
       />
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main className="fl-shop__main">
         {loading ? (
           <LoadingScreen message="Harvesting single stems..." />
         ) : error ? (
-          <ErrorMessage message={error} onRetry={loadSoloFlowers} />
+          <ErrorMessage message={error} onRetry={loadProducts} />
         ) : (
           <div style={{ flex: 1, width: '100%' }}>
             <ProductGrid

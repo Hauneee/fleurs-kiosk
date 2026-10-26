@@ -1,0 +1,251 @@
+.customer-info-page {
+  min-height: 100vh;
+  background: #fffafc;
+  color: #553746;
+}
+
+.customer-info-container {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 36px 20px 56px;
+}
+
+.customer-info-card {
+  width: 100%;
+  padding: 32px;
+  background: #ffffff;
+  border: 1px solid #f1dce5;
+  border-radius: 22px;
+  box-shadow: 0 12px 35px rgba(115, 59, 82, 0.07);
+}
+
+.customer-info-heading {
+  margin-bottom: 28px;
+}
+
+.customer-info-eyebrow {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: #b45d80;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.customer-info-heading h1 {
+  margin: 0 0 10px;
+  color: #60384b;
+  font-size: clamp(1.7rem, 4vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.customer-info-heading p {
+  margin: 0;
+  color: #8a7280;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.customer-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 13px 15px;
+  color: #8d3658;
+  background: #fff0f5;
+  border: 1px solid #f2cada;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.customer-info-banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.customer-info-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.customer-info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customer-info-field label {
+  color: #624153;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.customer-info-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 15px;
+  background: #fffdfd;
+  border: 1px solid #ead5df;
+  border-radius: 12px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.customer-info-input-wrap:focus-within {
+  background: #ffffff;
+  border-color: #cc7da0;
+  box-shadow: 0 0 0 3px rgba(204, 125, 160, 0.13);
+}
+
+.customer-info-input-wrap.has-error {
+  background: #fff9fb;
+  border-color: #d95c7b;
+}
+
+.customer-info-input-wrap.has-error:focus-within {
+  box-shadow: 0 0 0 3px rgba(217, 92, 123, 0.12);
+}
+
+.customer-info-input-icon {
+  flex-shrink: 0;
+  color: #b57a95;
+}
+
+.customer-info-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0;
+  color: #553746;
+  background: transparent;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.customer-info-input-wrap input::placeholder {
+  color: #b8a5af;
+  opacity: 1;
+}
+
+.customer-info-input-wrap input:focus-visible {
+  outline: none;
+}
+
+.customer-info-hint {
+  margin: 0;
+  color: #9a8390;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.customer-info-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: #c23d60;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.customer-info-error svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.customer-info-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.customer-info-actions button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-info-footer {
+  margin: 24px 0 0;
+  padding-top: 18px;
+  color: #9a8390;
+  border-top: 1px solid #f4e6ed;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .customer-info-container {
+    padding: 22px 14px 36px;
+  }
+
+  .customer-info-card {
+    padding: 23px 18px;
+    border-radius: 18px;
+  }
+
+  .customer-info-heading {
+    margin-bottom: 24px;
+  }
+
+  .customer-info-form {
+    gap: 19px;
+  }
+
+  .customer-info-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .customer-info-actions button {
+    width: 100%;
+  }
+}
+/* Center Continue text and arrow together */
+.customer-info-continue-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.customer-info-continue-btn > span,
+.customer-info-continue-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  text-align: center;
+}
+
+/* Prevent the arrow from shifting or shrinking */
+.customer-info-continue-content svg {
+  display: block;
+  flex-shrink: 0;
+}
+.customer-info-top-bar {
+  display: none !important;
+}
+/* Remove the unwanted pink line on Personal Information only */
+.customer-info-page > header {
+  border-top: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}

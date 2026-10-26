@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -11,6 +12,17 @@ import { getPaymentInfo } from '../utils/paymentInfo';
 
 const PAY_REF_KEY = 'fleurs_pay_ref';
 
+const COLORS = {
+  pink: '#E879A5',
+  lightPink: '#F8C9DA',
+  blush: '#FCE7EF',
+  darkPink: '#C2255C',
+  wine: '#9C1A47',
+  darkText: '#3F1424',
+  mutedText: '#684854',
+  white: '#FFFFFF',
+};
+
 export const PaymentConfirmationPage = ({
   cart,
   customer,
@@ -19,21 +31,21 @@ export const PaymentConfirmationPage = ({
   onOrderSuccess
 }) => {
   const isCash = getPaymentInfo().method === 'cash';
-  // Set by the payment page only after PayMongo confirmed the QR payment
   const paidRef = sessionStorage.getItem(PAY_REF_KEY) || '';
   const canSave = isCash || Boolean(paidRef);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const submittingRef = useRef(false);
-  const autoStartedRef = useRef(false);
 
   useEffect(() => {
     scrollToTop();
   }, []);
 
   const handleConfirm = async () => {
-    if (submittingRef.current || cart.length === 0 || !canSave) return;
+    if (submittingRef.current || cart.length === 0 || !canSave) {
+      return;
+    }
 
     submittingRef.current = true;
     setIsSubmitting(true);
@@ -48,29 +60,26 @@ export const PaymentConfirmationPage = ({
         },
         cart
       );
+
       sessionStorage.removeItem(PAY_REF_KEY);
       onOrderSuccess(completedOrder);
     } catch (err) {
       console.error('Order confirmation failed:', err);
+
       setErrorMessage(
         err.message ||
           'Unable to connect to the server. Please check the connection and try again.'
       );
+
       submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
-  // Save the order right away (cash, or QR already paid)
-  useEffect(() => {
-    if (canSave && !autoStartedRef.current) {
-      autoStartedRef.current = true;
-      handleConfirm();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const itemCount = cart.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
 
   return (
     <div
@@ -80,7 +89,8 @@ export const PaymentConfirmationPage = ({
         flexDirection: 'column',
         minHeight: '100vh',
         position: 'relative',
-        paddingBottom: '72px'
+        paddingBottom: '72px',
+        background: '#FFFAFC',
       }}
     >
       <FloralCorner position="top-left" />
@@ -90,6 +100,7 @@ export const PaymentConfirmationPage = ({
         title="PAYMENT CONFIRMATION"
         onBack={isSubmitting || paidRef ? undefined : onBack}
         showCart={false}
+        variant="light"
       />
 
       <main
@@ -97,12 +108,13 @@ export const PaymentConfirmationPage = ({
           flex: 1,
           width: '100%',
           maxWidth: '820px',
+          boxSizing: 'border-box',
           margin: '0 auto',
           padding: '8px 24px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          zIndex: 10
+          zIndex: 10,
         }}
       >
         {errorMessage && (
@@ -116,22 +128,28 @@ export const PaymentConfirmationPage = ({
         <div
           className="stitch-panel"
           style={{
-            padding: '40px 36px',
+            boxSizing: 'border-box',
+            width: '100%',
+            padding: 'clamp(24px, 5vw, 40px) clamp(16px, 4vw, 36px)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '22px',
             textAlign: 'center',
-            background: '#ffffff'
+            background: COLORS.white,
+            border: '1px solid #F8C9DA',
+            borderRadius: '24px',
+            boxShadow: '0 10px 30px rgba(194, 37, 92, 0.08)',
           }}
         >
           <h2
             style={{
+              margin: 0,
               fontFamily: 'var(--font-serif)',
-              fontSize: '2.2rem',
+              fontSize: 'clamp(1.5rem, 5vw, 2.2rem)',
               fontWeight: 800,
-              color: '#0d2547',
-              letterSpacing: '0.04em'
+              color: COLORS.darkText,
+              letterSpacing: '0.04em',
             }}
           >
             {isCash ? 'CASH PAYMENT' : 'PAYMENT CONFIRMATION'}
@@ -139,38 +157,50 @@ export const PaymentConfirmationPage = ({
 
           <p
             style={{
-              fontSize: '1.45rem',
+              margin: 0,
+              fontSize: 'clamp(1rem, 3vw, 1.2rem)',
               fontWeight: 700,
-              color: '#1e3a8a',
+              color: COLORS.mutedText,
               lineHeight: 1.5,
-              maxWidth: '620px'
+              maxWidth: '620px',
             }}
           >
             {isCash
-              ? 'Saving your order. Please pay in cash to the staff.'
+              ? 'Please confirm your order. Pay in cash to the staff.'
               : paidRef
-              ? 'Payment received! Saving your order...'
+              ? 'Payment received! Please confirm your order.'
               : 'We could not find a confirmed payment. Please go back and try again.'}
           </p>
 
           <div
             style={{
-              background: '#e0f2fe',
-              border: '2px dashed #60a5fa',
+              boxSizing: 'border-box',
+              maxWidth: '100%',
+              background: COLORS.blush,
+              border: `2px dashed ${COLORS.pink}`,
               borderRadius: '18px',
-              padding: '14px 28px'
+              padding: '14px clamp(16px, 5vw, 28px)',
             }}
           >
-            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e40af' }}>
+            <div
+              style={{
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                color: COLORS.wine,
+                letterSpacing: '0.03em',
+              }}
+            >
               {itemCount} {itemCount === 1 ? 'ITEM' : 'ITEMS'} ·{' '}
               {isCash ? 'AMOUNT TO PAY' : 'AMOUNT PAID'}
             </div>
+
             <div
               style={{
                 fontFamily: 'var(--font-serif)',
-                fontSize: '2.2rem',
+                fontSize: 'clamp(1.7rem, 6vw, 2.2rem)',
                 fontWeight: 800,
-                color: '#0f274a'
+                color: COLORS.darkText,
+                overflowWrap: 'anywhere',
               }}
             >
               {formatPeso(totalAmount)}
@@ -183,13 +213,34 @@ export const PaymentConfirmationPage = ({
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: '18px'
+              gap: '18px',
             }}
           >
-            {isSubmitting && <Loader2 size={44} className="animate-spin" color="#1d4ed8" />}
-            {(!canSave || (errorMessage && isCash)) && (
+            {isSubmitting && (
+              <Loader2
+                size={44}
+                className="animate-spin"
+                color={COLORS.darkPink}
+                aria-label="Processing order"
+              />
+            )}
+
+            {canSave && (
               <Button
-                variant="navy"
+                variant="primary"
+                size="xl"
+                onClick={handleConfirm}
+                disabled={isSubmitting || cart.length === 0}
+              >
+                {isSubmitting
+                  ? 'PROCESSING ORDER...'
+                  : 'CONFIRM ORDER'}
+              </Button>
+            )}
+
+            {!canSave && (
+              <Button
+                variant="primary"
                 size="xl"
                 onClick={onBack}
                 icon={<ArrowLeft size={24} />}
