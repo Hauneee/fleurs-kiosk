@@ -1,6 +1,12 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Trash2, RefreshCw, CheckCircle2 } from 'lucide-react';
+import {
+  Camera,
+  ImagePlus,
+  Trash2,
+  RefreshCw,
+  CheckCircle2,
+} from 'lucide-react';
 import { supabase } from '../services/supabase';
 import '../styles/confirmation.css';
 
@@ -66,8 +72,12 @@ export const PhotoProofPage = ({ order, onDone }) => {
   useEffect(() => {
     if (phase === 'live' && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(() => {
-        setMessage('Could not start the camera preview. Please try again.');
+
+      videoRef.current.play().catch((error) => {
+        console.error('Camera preview failed:', error);
+        setMessage(
+          'Could not start the camera preview. Please try again or choose a photo from your gallery.'
+        );
       });
     }
   }, [phase]);
@@ -90,9 +100,9 @@ export const PhotoProofPage = ({ order, onDone }) => {
         video: {
           facingMode: 'user',
           width: { ideal: 1280 },
-          height: { ideal: 960 }
+          height: { ideal: 960 },
         },
-        audio: false
+        audio: false,
       });
 
       streamRef.current = stream;
@@ -150,7 +160,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
     );
   };
 
-  const handleGallerySelection = async (event) => {
+  const handleGallerySelection = (event) => {
     const file = event.target.files?.[0];
 
     // Allow the same photo to be selected again later.
@@ -170,61 +180,58 @@ export const PhotoProofPage = ({ order, onDone }) => {
       return;
     }
 
-    try {
-      stopCamera();
+    stopCamera();
 
-      const image = new Image();
-      const temporaryUrl = URL.createObjectURL(file);
+    const temporaryUrl = URL.createObjectURL(file);
+    const image = new Image();
 
-      image.onload = () => {
-        try {
-          const scale = Math.min(1, MAX_WIDTH / image.naturalWidth);
-          const width = Math.round(image.naturalWidth * scale);
-          const height = Math.round(image.naturalHeight * scale);
+    image.onload = () => {
+      try {
+        const scale = Math.min(1, MAX_WIDTH / image.naturalWidth);
+        const width = Math.round(image.naturalWidth * scale);
+        const height = Math.round(image.naturalHeight * scale);
 
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
 
-          const context = canvas.getContext('2d');
+        const context = canvas.getContext('2d');
 
-          if (!context) {
-            throw new Error('Could not process the selected image.');
-          }
-
-          context.drawImage(image, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              URL.revokeObjectURL(temporaryUrl);
-
-              if (!blob) {
-                setMessage('Could not process this photo. Please choose another one.');
-                return;
-              }
-
-              showPreview(blob);
-            },
-            'image/jpeg',
-            0.85
-          );
-        } catch (error) {
-          URL.revokeObjectURL(temporaryUrl);
-          console.error('Gallery image processing failed:', error);
-          setMessage('Could not process this photo. Please choose another one.');
+        if (!context) {
+          throw new Error('Could not process the selected image.');
         }
-      };
 
-      image.onerror = () => {
+        context.drawImage(image, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(temporaryUrl);
+
+            if (!blob) {
+              setMessage(
+                'Could not process this photo. Please choose another one.'
+              );
+              return;
+            }
+
+            showPreview(blob);
+          },
+          'image/jpeg',
+          0.85
+        );
+      } catch (error) {
         URL.revokeObjectURL(temporaryUrl);
-        setMessage('Could not open this image. Please choose another one.');
-      };
+        console.error('Gallery image processing failed:', error);
+        setMessage('Could not process this photo. Please choose another one.');
+      }
+    };
 
-      image.src = temporaryUrl;
-    } catch (error) {
-      console.error('Gallery selection failed:', error);
-      setMessage('Could not load the selected photo. Please try again.');
-    }
+    image.onerror = () => {
+      URL.revokeObjectURL(temporaryUrl);
+      setMessage('Could not open this image. Please choose another one.');
+    };
+
+    image.src = temporaryUrl;
   };
 
   const openGallery = () => {
@@ -249,12 +256,26 @@ export const PhotoProofPage = ({ order, onDone }) => {
   };
 
   const savePhoto = async () => {
-    if (!blobRef.current || !order?.order_number || phase === 'saving') {
+    if (phase === 'saving') return;
+
+    if (!blobRef.current) {
+      setMessage('Please take a photo or choose one from your gallery first.');
+      return;
+    }
+
+    if (!order?.order_number) {
+      setMessage(
+        'Order information is missing. Please return to your order and try again.'
+      );
+      console.error(
+        'Photo proof cannot be saved: missing order number.',
+        order
+      );
       return;
     }
 
     if (!supabase) {
-      setMessage('Supabase is not configured.');
+      setMessage('Supabase is not configured. Please contact staff.');
       return;
     }
 
@@ -263,13 +284,16 @@ export const PhotoProofPage = ({ order, onDone }) => {
 
     try {
       const fileName =
-        `${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}.jpg`;
+        `${
+          globalThis.crypto?.randomUUID?.() ||
+          `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        }.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(fileName, blobRef.current, {
           contentType: 'image/jpeg',
-          upsert: false
+          upsert: false,
         });
 
       if (uploadError) {
@@ -280,18 +304,29 @@ export const PhotoProofPage = ({ order, onDone }) => {
         'save_order_proof',
         {
           p_order_number: order.order_number,
-          p_path: fileName
+          p_path: fileName,
         }
       );
 
-      if (rpcError || saved === false) {
-        throw rpcError || new Error('Could not link the photo to your order.');
+      if (rpcError) {
+        throw rpcError;
+      }
+
+      if (saved === false) {
+        throw new Error('Could not link the photo to your order. Please try again.');
       }
 
       const { data } = supabase.storage
         .from(BUCKET)
         .getPublicUrl(fileName);
 
+      if (!data?.publicUrl) {
+        throw new Error(
+          'The photo was saved, but its URL could not be retrieved.'
+        );
+      }
+
+      // Continue to the final order confirmation page.
       onDone(data.publicUrl);
     } catch (error) {
       console.error('Saving order proof failed:', error);
@@ -314,12 +349,12 @@ export const PhotoProofPage = ({ order, onDone }) => {
     fontWeight: 800,
     fontSize: '0.95rem',
     cursor: 'pointer',
-    border: '1px solid #E8C7D1'
+    border: '1px solid #E8C7D1',
   };
 
   return (
-   <div className="fl-done fl-photo-proof-page">
-  <div className="fl-done__card">
+    <div className="fl-done fl-photo-proof-page">
+      <div className="fl-done__card">
         <h1 className="fl-done__title">One last step</h1>
 
         <p className="fl-done__lead">
@@ -328,9 +363,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
           delivery and can be viewed later in Track My Order.
         </p>
 
-      
         <section className="fl-photo">
-          {/* Hidden image picker */}
           <input
             ref={galleryRef}
             type="file"
@@ -340,7 +373,6 @@ export const PhotoProofPage = ({ order, onDone }) => {
             aria-label="Choose a photo from your gallery"
           />
 
-          {/* Camera preview */}
           {phase === 'live' && (
             <>
               <div className="fl-photo__frame">
@@ -386,7 +418,6 @@ export const PhotoProofPage = ({ order, onDone }) => {
             </>
           )}
 
-          {/* Selected photo preview */}
           {(phase === 'preview' || phase === 'saving') && (
             <>
               <div className="fl-photo__frame">
@@ -402,7 +433,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
                   color: '#684854',
                   textAlign: 'center',
                   fontWeight: 700,
-                  margin: '12px 0'
+                  margin: '12px 0',
                 }}
               >
                 Happy with your photo? Save it to continue, or change it.
@@ -427,7 +458,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
                   style={{
                     ...actionStyle,
                     background: '#FFFFFF',
-                    color: '#684854'
+                    color: '#684854',
                   }}
                   onClick={openGallery}
                   disabled={phase === 'saving'}
@@ -442,7 +473,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
                     ...actionStyle,
                     background: '#FFF0F2',
                     color: '#A34455',
-                    borderColor: '#F0C8D0'
+                    borderColor: '#F0C8D0',
                   }}
                   onClick={removePhoto}
                   disabled={phase === 'saving'}
@@ -464,7 +495,6 @@ export const PhotoProofPage = ({ order, onDone }) => {
             </>
           )}
 
-          {/* Initial screen or camera error */}
           {(phase === 'idle' || phase === 'error') && (
             <div
               style={{
@@ -472,7 +502,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
                 flexDirection: 'column',
                 gap: '12px',
                 alignItems: 'center',
-                width: '100%'
+                width: '100%',
               }}
             >
               <button
@@ -491,7 +521,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
                   background: '#FFFFFF',
                   color: '#684854',
                   width: '100%',
-                  maxWidth: '320px'
+                  maxWidth: '320px',
                 }}
                 onClick={openGallery}
               >
