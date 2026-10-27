@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { QuantitySelector } from './QuantitySelector';
 import { Button } from './Button';
@@ -154,7 +155,11 @@ export const ProductModal = ({
 
         <div
           className="fl-pm__actions"
-          style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
         >
           <Button
             variant="accent"
@@ -168,7 +173,7 @@ export const ProductModal = ({
           </Button>
 
           <Button
-            variant="navy"
+            variant="accent"
             size="xl"
             onClick={handleCheckoutNow}
             disabled={!isValidQuantity()}
@@ -178,7 +183,7 @@ export const ProductModal = ({
           </Button>
 
           <Button
-            variant="navy"
+            variant="accent"
             size="md"
             onClick={onClose}
             icon={<ArrowLeft size={20} />}
