@@ -405,6 +405,7 @@ export const createOrder = async (orderPayload, items) => {
   }
 
   const totalAmount = Number(orderPayload?.total_amount) || 0;
+
   const amountPaid =
     Number(orderPayload?.amount_paid) ||
     (paymentMethod === 'gcash' ? totalAmount : 0);
@@ -449,6 +450,18 @@ export const createOrder = async (orderPayload, items) => {
     const paymentReference =
       orderPayload?.payment_reference || null;
 
+    const cashReceived = Number(orderPayload?.amount_paid) > 0
+      ? Number(orderPayload.amount_paid)
+      : Number(paymentInfo?.cashReceived) > 0
+        ? Number(paymentInfo.cashReceived)
+        : null;
+
+    if (paymentMethod === 'cash' && cashReceived === null) {
+      throw new Error(
+        'Cash received amount is missing. Please return to payment and enter the cash received.'
+      );
+    }
+
     const controller = new AbortController();
     let timeoutId;
     let requestTimedOut = false;
@@ -460,7 +473,7 @@ export const createOrder = async (orderPayload, items) => {
       }, ORDER_REQUEST_TIMEOUT_MS);
 
       const { data, error } = await supabase
-               .rpc('create_kiosk_order', {
+        .rpc('create_kiosk_order', {
           p_customer_name: customer.name.trim(),
           p_customer_email: customer.email.trim(),
           p_customer_phone: customer.phone.trim(),
@@ -469,11 +482,7 @@ export const createOrder = async (orderPayload, items) => {
           p_idempotency_key: idempotencyKey,
           p_payment_reference: paymentReference,
           p_cash_received:
-            paymentMethod === 'cash'
-              ? Number(paymentInfo?.cashReceived) ||
-                Number(orderPayload?.amount_paid) ||
-                null
-              : null,
+            paymentMethod === 'cash' ? cashReceived : null,
         })
         .abortSignal(controller.signal);
 
@@ -500,6 +509,11 @@ export const createOrder = async (orderPayload, items) => {
         total_amount: Number(result.total_amount ?? totalAmount),
         payment_method: result.payment_method || paymentMethod,
         amount_paid: Number(result.amount_paid ?? amountPaid),
+        cash_received: Number(
+          result.cash_received ?? (
+            paymentMethod === 'cash' ? cashReceived : amountPaid
+          )
+        ),
         change_amount: Number(
           result.change_amount ?? changeAmount
         ),
@@ -556,6 +570,8 @@ export const createOrder = async (orderPayload, items) => {
     customer_phone: customer.phone.trim(),
     total_amount: totalAmount,
     amount_paid: amountPaid,
+    cash_received:
+      paymentMethod === 'cash' ? amountPaid : null,
     change_amount: changeAmount,
     status: 'pending',
     payment_status: 'pending',
