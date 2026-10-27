@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
@@ -32,24 +31,36 @@ const getCustomer = (order) =>
   order?.customer || order?.customer_info || {};
 
 const getOrderNumber = (order) =>
-  order?.order_number || order?.orderNumber || order?.id || 'N/A';
+  order?.order_number ||
+  order?.orderNumber ||
+  order?.id ||
+  'N/A';
 
 const getPaymentMethod = (order) =>
-  order?.payment_method || order?.paymentMethod || 'Not available';
+  order?.payment_method ||
+  order?.paymentMethod ||
+  'Not available';
 
 const getItemName = (item) =>
-  item?.product_name || item?.name || 'Flower arrangement';
+  item?.product_name ||
+  item?.name ||
+  'Flower arrangement';
 
 const getItemPrice = (item) => {
   const quantity = Number(item?.quantity) || 1;
 
   return Number(
     item?.line_total ??
-    item?.subtotal ??
-    item?.total ??
-    (Number(item?.unit_price ?? item?.price) || 0) * quantity
+      item?.subtotal ??
+      item?.total ??
+      (Number(item?.unit_price ?? item?.price) || 0) *
+        quantity
   );
 };
+
+// ===============================
+// FULL RECEIPT GENERATOR
+// ===============================
 
 const drawFullReceipt = (order) =>
   new Promise((resolve, reject) => {
@@ -57,21 +68,27 @@ const drawFullReceipt = (order) =>
       const items = getItems(order);
       const customer = getCustomer(order);
       const paymentMethod = String(getPaymentMethod(order));
+
       const total = Number(
-        order?.total_amount ?? order?.totalAmount ?? order?.total ?? 0
+        order?.total_amount ??
+          order?.totalAmount ??
+          order?.total ??
+          0
       );
 
       const width = 900;
       const padding = 56;
       const rightEdge = width - padding;
-      const canvas = document.createElement('canvas');
 
-      // Tall working canvas; crop it to the actual content afterward.
+      const canvas = document.createElement('canvas');
       canvas.width = width;
-      canvas.height = 5000;
+      canvas.height = 10000;
 
       const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Could not create the receipt.');
+
+      if (!ctx) {
+        throw new Error('Could not create the receipt.');
+      }
 
       ctx.fillStyle = COLORS.cream;
       ctx.fillRect(0, 0, width, canvas.height);
@@ -96,8 +113,21 @@ const drawFullReceipt = (order) =>
         ctx.fillText(String(value ?? ''), x, baseline);
       };
 
-      const center = (value, size, color = COLORS.text, weight = '400') => {
-        text(value, width / 2, y, size, color, weight, 'center');
+      const center = (
+        value,
+        size,
+        color = COLORS.text,
+        weight = '400'
+      ) => {
+        text(
+          value,
+          width / 2,
+          y,
+          size,
+          color,
+          weight,
+          'center'
+        );
         y += size + 16;
       };
 
@@ -114,14 +144,20 @@ const drawFullReceipt = (order) =>
 
       const wrappedLines = (value, maxWidth, font) => {
         ctx.font = font;
+
         const words = String(value ?? '').split(/\s+/);
         const lines = [];
         let line = '';
 
         words.forEach((word) => {
-          const candidate = line ? `${line} ${word}` : word;
+          const candidate = line
+            ? `${line} ${word}`
+            : word;
 
-          if (ctx.measureText(candidate).width > maxWidth && line) {
+          if (
+            ctx.measureText(candidate).width > maxWidth &&
+            line
+          ) {
             lines.push(line);
             line = word;
           } else {
@@ -130,6 +166,7 @@ const drawFullReceipt = (order) =>
         });
 
         if (line) lines.push(line);
+
         return lines.length ? lines : [''];
       };
 
@@ -143,7 +180,12 @@ const drawFullReceipt = (order) =>
         lineGap = 31
       ) => {
         const font = `${weight} ${size}px Arial, sans-serif`;
-        const lines = wrappedLines(value, maxWidth, font);
+
+        const lines = wrappedLines(
+          value,
+          maxWidth,
+          font
+        );
 
         lines.forEach((line) => {
           text(line, x, y, size, color, weight);
@@ -153,8 +195,12 @@ const drawFullReceipt = (order) =>
 
       center('FLEURS', 48, COLORS.darkPink, '800');
       center('by Blossoms Craft', 29, COLORS.text, '600');
-      y += 4;
-      center('OFFICIAL ORDER RECEIPT', 27, COLORS.darkPink, '700');
+      center(
+        'OFFICIAL ORDER RECEIPT',
+        27,
+        COLORS.darkPink,
+        '700'
+      );
 
       divider();
 
@@ -167,7 +213,9 @@ const drawFullReceipt = (order) =>
         '700'
       );
 
-      const dateValue = order?.created_at || order?.createdAt;
+      const dateValue =
+        order?.created_at || order?.createdAt;
+
       const dateText = dateValue
         ? new Date(dateValue).toLocaleString('en-PH', {
             timeZone: 'Asia/Manila',
@@ -180,16 +228,45 @@ const drawFullReceipt = (order) =>
             timeStyle: 'short',
           });
 
-      wrapped(`Date: ${dateText}`, padding, width - padding * 2, 20);
+      wrapped(
+        `Date: ${dateText}`,
+        padding,
+        width - padding * 2,
+        20
+      );
+
       divider();
 
-      text('CUSTOMER DETAILS', padding, y, 24, COLORS.darkPink, '700');
+      text(
+        'CUSTOMER DETAILS',
+        padding,
+        y,
+        24,
+        COLORS.darkPink,
+        '700'
+      );
+
       y += 44;
 
       const customerFields = [
-        ['Customer Name', customer?.name || order?.customer_name || order?.name],
-        ['Email', customer?.email || order?.customer_email || order?.email],
-        ['Phone', customer?.phone || order?.customer_phone || order?.phone],
+        [
+          'Customer Name',
+          customer?.name ||
+            order?.customer_name ||
+            order?.name,
+        ],
+        [
+          'Email',
+          customer?.email ||
+            order?.customer_email ||
+            order?.email,
+        ],
+        [
+          'Phone',
+          customer?.phone ||
+            order?.customer_phone ||
+            order?.phone,
+        ],
       ];
 
       customerFields.forEach(([label, value]) => {
@@ -204,10 +281,18 @@ const drawFullReceipt = (order) =>
 
       divider();
 
-      text('ORDER ITEMS', padding, y, 24, COLORS.darkPink, '700');
+      text(
+        'ORDER ITEMS',
+        padding,
+        y,
+        24,
+        COLORS.darkPink,
+        '700'
+      );
+
       y += 48;
 
-      if (items.length) {
+      if (items.length > 0) {
         items.forEach((item) => {
           const name = getItemName(item);
           const quantity = Number(item?.quantity) || 1;
@@ -219,7 +304,15 @@ const drawFullReceipt = (order) =>
             '600 21px Arial, sans-serif'
           );
 
-          text(nameLines[0], padding, y, 21, COLORS.text, '600');
+          text(
+            nameLines[0],
+            padding,
+            y,
+            21,
+            COLORS.text,
+            '600'
+          );
+
           text(
             `₱${formatPeso(price)}`,
             rightEdge,
@@ -229,22 +322,41 @@ const drawFullReceipt = (order) =>
             '600',
             'right'
           );
+
           y += 32;
 
           nameLines.slice(1).forEach((line) => {
-            text(line, padding + 12, y, 19, COLORS.text);
+            text(
+              line,
+              padding + 12,
+              y,
+              19,
+              COLORS.text
+            );
             y += 29;
           });
 
           y += 12;
         });
       } else {
-        wrapped('No item details available.', padding, width - padding * 2);
+        wrapped(
+          'No item details available.',
+          padding,
+          width - padding * 2
+        );
       }
 
       divider();
 
-      text('TOTAL', padding, y, 31, COLORS.darkPink, '800');
+      text(
+        'TOTAL',
+        padding,
+        y,
+        31,
+        COLORS.darkPink,
+        '800'
+      );
+
       text(
         `₱${formatPeso(total)}`,
         rightEdge,
@@ -254,6 +366,7 @@ const drawFullReceipt = (order) =>
         '800',
         'right'
       );
+
       y += 56;
 
       wrapped(
@@ -264,6 +377,7 @@ const drawFullReceipt = (order) =>
         '#3F1424',
         '600'
       );
+
       y += 5;
 
       const paidValue =
@@ -277,6 +391,7 @@ const drawFullReceipt = (order) =>
         Number.isFinite(Number(paidValue))
       ) {
         text('Amount Paid', padding, y, 21);
+
         text(
           `₱${formatPeso(paidValue)}`,
           rightEdge,
@@ -286,10 +401,12 @@ const drawFullReceipt = (order) =>
           '600',
           'right'
         );
+
         y += 36;
       }
 
-      const changeValue = order?.change_amount ?? order?.change;
+      const changeValue =
+        order?.change_amount ?? order?.change;
 
       if (
         paymentMethod.toLowerCase() === 'cash' &&
@@ -297,7 +414,8 @@ const drawFullReceipt = (order) =>
         changeValue !== null &&
         Number.isFinite(Number(changeValue))
       ) {
-        text('Exchange', padding, y, 21);
+        text('Change', padding, y, 21);
+
         text(
           `₱${formatPeso(changeValue)}`,
           rightEdge,
@@ -307,26 +425,44 @@ const drawFullReceipt = (order) =>
           '600',
           'right'
         );
+
         y += 36;
       }
 
       divider();
 
       center('Thank you for choosing', 22, COLORS.text);
-      center('Fleurs by Blossoms Craft', 28, COLORS.darkPink, '700');
-      center('Please keep this receipt for your records.', 18);
-
-      y += 30;
+      center(
+        'Fleurs by Blossoms Craft',
+        28,
+        COLORS.darkPink,
+        '700'
+      );
+      center(
+        'Please keep this receipt for your records.',
+        18
+      );
 
       const finalCanvas = document.createElement('canvas');
+
       finalCanvas.width = width;
       finalCanvas.height = Math.ceil(y + 35);
 
       const finalCtx = finalCanvas.getContext('2d');
-      if (!finalCtx) throw new Error('Could not finish the receipt.');
+
+      if (!finalCtx) {
+        throw new Error('Could not finish the receipt.');
+      }
 
       finalCtx.fillStyle = COLORS.cream;
-      finalCtx.fillRect(0, 0, width, finalCanvas.height);
+
+      finalCtx.fillRect(
+        0,
+        0,
+        width,
+        finalCanvas.height
+      );
+
       finalCtx.drawImage(
         canvas,
         0,
@@ -341,15 +477,22 @@ const drawFullReceipt = (order) =>
 
       finalCanvas.toBlob((blob) => {
         if (!blob) {
-          reject(new Error('Could not download the receipt image.'));
+          reject(
+            new Error('Could not download the receipt image.')
+          );
           return;
         }
+
         resolve(blob);
       }, 'image/png');
     } catch (error) {
       reject(error);
     }
   });
+
+// ===============================
+// ORDER CONFIRMATION PAGE
+// ===============================
 
 export const OrderConfirmationPage = ({
   order,
@@ -374,14 +517,16 @@ export const OrderConfirmationPage = ({
         ],
       });
     } catch {
-      // Ignore if canvas is unavailable.
+      // Ignore confetti errors.
     }
   }, []);
 
   if (!order) return null;
 
   const formattedDate = new Date(
-    order.created_at || order.createdAt || Date.now()
+    order.created_at ||
+      order.createdAt ||
+      Date.now()
   ).toLocaleString('en-PH', {
     timeZone: 'Asia/Manila',
     month: 'short',
@@ -395,15 +540,21 @@ export const OrderConfirmationPage = ({
   const paymentMethod = String(getPaymentMethod(order));
   const items = getItems(order);
   const customer = getCustomer(order);
+
   const total = Number(
-    order.total_amount ?? order.totalAmount ?? order.total ?? 0
+    order.total_amount ??
+      order.totalAmount ??
+      order.total ??
+      0
   );
 
   const amountPaid = Number(
     order.amount_paid ??
-    order.cash_received ??
-    order.cashReceived ??
-    (paymentMethod.toLowerCase() === 'cash' ? 0 : total)
+      order.cash_received ??
+      order.cashReceived ??
+      (paymentMethod.toLowerCase() === 'cash'
+        ? 0
+        : total)
   );
 
   const changeAmount = Number(
@@ -417,25 +568,32 @@ export const OrderConfirmationPage = ({
     try {
       const blob = await drawFullReceipt(order);
       const url = URL.createObjectURL(blob);
+
       const safeNumber = String(getOrderNumber(order))
         .replace(/[^a-zA-Z0-9-_]/g, '-');
 
       const link = document.createElement('a');
+
       link.href = url;
       link.download = `Fleurs-Receipt-${safeNumber}.png`;
+
       document.body.appendChild(link);
       link.click();
       link.remove();
 
-      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      window.setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 5000);
 
       setDownloadMessage(
         'Your receipt download has started. Check your Downloads folder.'
       );
     } catch (error) {
       console.error('Receipt download failed:', error);
+
       setDownloadMessage(
-        error?.message || 'Unable to generate the receipt. Please try again.'
+        error?.message ||
+          'Unable to generate the receipt. Please try again.'
       );
     } finally {
       setDownloading(false);
@@ -460,6 +618,20 @@ export const OrderConfirmationPage = ({
     color: COLORS.text,
   };
 
+  const actionButtonStyle = {
+    display: 'flex',
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '16px',
+    border: 'none',
+    borderRadius: '14px',
+    fontWeight: 800,
+    fontSize: '1rem',
+    cursor: 'pointer',
+  };
+
   return (
     <div className="fl-done">
       <div
@@ -472,6 +644,8 @@ export const OrderConfirmationPage = ({
           boxShadow: '0 18px 55px rgba(194, 37, 92, 0.12)',
         }}
       >
+        {/* SUCCESS HEADER */}
+
         <div
           style={{
             background: 'linear-gradient(135deg, #FFF0F5, #FFFFFF)',
@@ -506,11 +680,14 @@ export const OrderConfirmationPage = ({
           </h1>
 
           <p className="fl-done__lead">
-            Thank you for your order! We are preparing your flowers with care.
+            Thank you for your order! We are preparing
+            your flowers with care.
           </p>
         </div>
 
         <div style={{ padding: '0 20px 26px' }}>
+          {/* ORDER NUMBER */}
+
           <div
             style={{
               background: COLORS.darkPink,
@@ -541,6 +718,8 @@ export const OrderConfirmationPage = ({
             </p>
           </div>
 
+          {/* ORDER SUMMARY */}
+
           <section style={sectionStyle}>
             <div
               style={{
@@ -554,18 +733,35 @@ export const OrderConfirmationPage = ({
 
               <div>
                 <h2 style={{ color: COLORS.text, margin: 0 }}>
-                  Your Order Receipt
+                  Order Summary
                 </h2>
-                <p style={{ color: '#92717E', margin: '5px 0 0', fontSize: '0.9rem' }}>
-                  Download and keep a copy of your order.
+
+                <p
+                  style={{
+                    color: '#92717E',
+                    margin: '5px 0 0',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  Here are the details of your order.
                 </p>
               </div>
             </div>
 
-            <div style={{ ...rowStyle, flexDirection: 'column', gap: '5px' }}>
+            <div
+              style={{
+                ...rowStyle,
+                flexDirection: 'column',
+                gap: '5px',
+              }}
+            >
               <span>Customer</span>
+
               <strong style={{ overflowWrap: 'anywhere' }}>
-                {customer.name || order.customer_name || order.name || 'N/A'}
+                {customer.name ||
+                  order.customer_name ||
+                  order.name ||
+                  'N/A'}
               </strong>
             </div>
 
@@ -586,10 +782,22 @@ export const OrderConfirmationPage = ({
                     style={rowStyle}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
                         {getItemName(item)}
                       </div>
-                      <div style={{ color: '#92717E', fontSize: '0.9rem', marginTop: '4px' }}>
+
+                      <div
+                        style={{
+                          color: '#92717E',
+                          fontSize: '0.9rem',
+                          marginTop: '4px',
+                        }}
+                      >
                         Quantity: {Number(item.quantity) || 1}
                       </div>
                     </div>
@@ -632,55 +840,23 @@ export const OrderConfirmationPage = ({
 
               {paymentMethod.toLowerCase() === 'cash' && (
                 <div style={{ ...rowStyle, borderBottom: 'none' }}>
-                  <span>Exchange</span>
+                  <span>Change</span>
                   <strong>₱{formatPeso(changeAmount)}</strong>
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={downloadReceipt}
-              disabled={downloading}
-              style={{
-                display: 'flex',
-                width: '100%',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '16px',
-                marginTop: '20px',
-                border: 'none',
-                borderRadius: '14px',
-                background: downloading ? '#B87A93' : COLORS.darkPink,
-                color: COLORS.white,
-                fontWeight: 800,
-                fontSize: '1rem',
-                cursor: downloading ? 'wait' : 'pointer',
-              }}
-            >
-              <Download size={21} />
-              {downloading ? 'Preparing Receipt...' : 'Download Full Receipt'}
-            </button>
-
-            {downloadMessage && (
-              <p
-                role="status"
-                style={{
-                  color: COLORS.text,
-                  fontSize: '0.9rem',
-                  margin: '12px 0 0',
-                  overflowWrap: 'anywhere',
-                }}
-              >
-                {downloadMessage}
-              </p>
-            )}
           </section>
 
+          {/* PHOTO PROOF */}
+
           {proofUrl && (
-            <section className="fl-photo fl-photo--done" style={sectionStyle}>
-              <h2 style={{ color: COLORS.text }}>Photo Proof</h2>
+            <section
+              className="fl-photo fl-photo--done"
+              style={sectionStyle}
+            >
+              <h2 style={{ color: COLORS.text }}>
+                Photo Proof
+              </h2>
 
               <div className="fl-photo__frame">
                 <img
@@ -696,30 +872,81 @@ export const OrderConfirmationPage = ({
             </section>
           )}
 
+          {/* ACTIONS: RECEIPT ABOVE TRACK ORDER */}
+
           <div
             className="fl-done__actions"
             style={{
               display: 'flex',
-              flexWrap: 'wrap',
+              flexDirection: 'column',
               gap: '12px',
               marginTop: '22px',
             }}
           >
+            {/* DOWNLOAD RECEIPT — FIRST BUTTON */}
+
+            <button
+              type="button"
+              onClick={downloadReceipt}
+              disabled={downloading}
+              style={{
+                ...actionButtonStyle,
+                background: downloading
+                  ? '#B87A93'
+                  : COLORS.darkPink,
+                color: COLORS.white,
+                cursor: downloading ? 'wait' : 'pointer',
+              }}
+            >
+              <Download size={21} />
+
+              {downloading
+                ? 'Preparing Receipt...'
+                : 'Download Full Receipt'}
+            </button>
+
+            {downloadMessage && (
+              <p
+                role="status"
+                style={{
+                  color: COLORS.text,
+                  fontSize: '0.9rem',
+                  margin: '0 0 4px',
+                  overflowWrap: 'anywhere',
+                  textAlign: 'center',
+                }}
+              >
+                {downloadMessage}
+              </p>
+            )}
+
+            {/* TRACK ORDER — BELOW RECEIPT */}
+
             {onTrack && (
               <button
                 type="button"
                 className="fl-btn fl-btn--soft"
                 onClick={onTrack}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                }}
               >
                 <SearchCheck size={22} />
                 Track this order
               </button>
             )}
 
+            {/* BACK TO MENU */}
+
             <button
               type="button"
               className="fl-btn fl-btn--rose"
               onClick={onNewOrder}
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+              }}
             >
               <RotateCcw size={22} />
               Back to menu
