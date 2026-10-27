@@ -263,3 +263,8 @@ video.fl-photo__video {
   content: none !important;
   display: none !important;
 }
+/* Keep the photo-proof step separate from the final order ticket */
+.fl-photo-proof-page .fl-done__id,
+.fl-photo-proof-page .fl-done__hint {
+  display: none !important;
+}

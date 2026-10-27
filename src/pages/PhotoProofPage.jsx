@@ -318,8 +318,8 @@ export const PhotoProofPage = ({ order, onDone }) => {
   };
 
   return (
-    <div className="fl-done">
-      <div className="fl-done__card">
+   <div className="fl-done fl-photo-proof-page">
+  <div className="fl-done__card">
         <h1 className="fl-done__title">One last step</h1>
 
         <p className="fl-done__lead">
