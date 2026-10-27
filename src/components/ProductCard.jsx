@@ -1,6 +1,6 @@
 import React from 'react';
 import { BowSvg } from './Decorations';
-import { getStockInfo } from '../utils/stock';
+import { getStockInfo } from '../pages/stock';
 
 export const ProductCard = ({ product, onSelect }) => {
   const stockInfo = getStockInfo(product);

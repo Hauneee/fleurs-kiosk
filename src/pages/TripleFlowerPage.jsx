@@ -6,7 +6,7 @@ import { ProductModal } from '../components/ProductModal';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { fetchProducts } from '../services/supabase';
-import { getStockInfo } from '../utils/stock';
+import { getStockInfo } from './stock';
 import '../styles/shop.css';
 import '../styles/light.css';
 

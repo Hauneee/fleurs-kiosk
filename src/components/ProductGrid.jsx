@@ -1,6 +1,6 @@
 import React from 'react';
 import { ProductCard } from './ProductCard';
-import { getStockInfo } from '../utils/stock';
+import { getStockInfo } from '../pages/stock';
 
 export const ProductGrid = ({
   products = [],

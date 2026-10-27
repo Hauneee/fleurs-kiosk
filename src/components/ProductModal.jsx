@@ -6,7 +6,7 @@ import {
   ArrowLeft,
   CreditCard,
 } from 'lucide-react';
-import { getStockInfo } from '../utils/stock';
+import { getStockInfo } from '../pages/stock';
 
 const MAX_ITEMS = 10;
 const MAX_ITEMS_MESSAGE = 'Maximum order is only 10 items!';
