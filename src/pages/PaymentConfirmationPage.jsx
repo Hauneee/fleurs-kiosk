@@ -248,22 +248,22 @@ export const PaymentConfirmationPage = ({
             {isCash ? 'CASH PAYMENT' : 'PAYMENT CONFIRMATION'}
           </h2>
 
-          <p
-            style={{
-              margin: 0,
-              fontSize: 'clamp(1rem, 3vw, 1.2rem)',
-              fontWeight: 700,
-              color: COLORS.mutedText,
-              lineHeight: 1.5,
-              maxWidth: '620px',
-            }}
-          >
-            {isCash
-              ? 'Enter the cash amount you will pay. The kiosk will calculate your change.'
-              : paidRef
-                ? 'Payment received! Please confirm your order.'
-                : 'We could not find a confirmed payment. Please go back and try again.'}
-          </p>
+         {!isCash && (
+  <p
+    style={{
+      margin: 0,
+      fontSize: 'clamp(1rem, 3vw, 1.2rem)',
+      fontWeight: 700,
+      color: COLORS.mutedText,
+      lineHeight: 1.5,
+      maxWidth: '620px',
+    }}
+  >
+    {paidRef
+      ? 'Payment received! Please confirm your order.'
+      : 'We could not find a confirmed payment. Please go back and try again.'}
+  </p>
+)}
 
           <div
             style={{
