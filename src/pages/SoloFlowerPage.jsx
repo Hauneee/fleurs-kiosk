@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { ProductGrid } from '../components/ProductGrid';
@@ -16,6 +15,7 @@ export const SoloFlowerPage = ({
   maxQuantity = 10,
   onLimitReached,
   onAddToCart,
+  onCheckoutNow,
   onAdmin,
 }) => {
   const [products, setProducts] = useState([]);
@@ -27,14 +27,11 @@ export const SoloFlowerPage = ({
     try {
       setLoading(true);
       setError(null);
-
       const data = await fetchProducts('solo-flower');
       setProducts(data);
     } catch (err) {
-      console.error('Failed to load solo flowers:', err);
-      setError(
-        'Unable to load solo flowers from the database. Please try again.'
-      );
+      console.error('Failed to load solo flower products:', err);
+      setError('Unable to load solo flowers from the database. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -57,31 +54,26 @@ export const SoloFlowerPage = ({
 
       <main className="fl-shop__main">
         {loading ? (
-          <LoadingScreen message="Harvesting single stems..." />
+          <LoadingScreen message="Preparing solo flowers..." />
         ) : error ? (
-          <ErrorMessage
-            message={error}
-            onRetry={loadProducts}
-          />
+          <ErrorMessage message={error} onRetry={loadProducts} />
         ) : (
           <div style={{ flex: 1, width: '100%' }}>
             <ProductGrid
               products={products}
               columns={3}
-              onSelectProduct={(product) =>
-                setSelectedProduct(product)
-              }
+              onSelectProduct={(product) => setSelectedProduct(product)}
             />
           </div>
         )}
       </main>
 
-      {/* Product Selection / Quantity Modal */}
       <ProductModal
         product={selectedProduct}
         isOpen={Boolean(selectedProduct)}
         onClose={() => setSelectedProduct(null)}
         onAddToCart={onAddToCart}
+        onCheckoutNow={onCheckoutNow}
         maxQuantity={maxQuantity}
         onLimitReached={onLimitReached}
       />

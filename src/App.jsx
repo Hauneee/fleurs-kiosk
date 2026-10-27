@@ -254,6 +254,17 @@ export default function App() {
     return true;
   };
 
+  // Add the selected product, then open Customer Information.
+  const handleCheckoutNow = (product, quantity = 1) => {
+    const result = handleAddToCart(product, quantity);
+
+    if (result === false) return false;
+
+    setPendingInfo(null);
+    setCurrentPage('customer-info');
+    return true;
+  };
+
   const handleUpdateQuantity = (productId, newQuantity) => {
     const requestedQuantity = Number(newQuantity);
 
@@ -584,6 +595,7 @@ export default function App() {
           maxQuantity={remainingSlots}
           onLimitReached={() => showToast(MAX_ITEMS_MESSAGE)}
           onAddToCart={handleAddToCart}
+          onCheckoutNow={handleCheckoutNow}
         />
       )}
 
@@ -595,6 +607,7 @@ export default function App() {
           maxQuantity={remainingSlots}
           onLimitReached={() => showToast(MAX_ITEMS_MESSAGE)}
           onAddToCart={handleAddToCart}
+          onCheckoutNow={handleCheckoutNow}
         />
       )}
 
@@ -606,6 +619,7 @@ export default function App() {
           maxQuantity={remainingSlots}
           onLimitReached={() => showToast(MAX_ITEMS_MESSAGE)}
           onAddToCart={handleAddToCart}
+          onCheckoutNow={handleCheckoutNow}
         />
       )}
 
