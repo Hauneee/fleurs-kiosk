@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -46,8 +47,6 @@ export const PaymentPage = ({
   const intentsRef = useRef([]);
   const qrRequestRef = useRef(0);
 
-  // Keep cart changes stable without restarting QR generation
-  // merely because the parent creates a new array reference.
   const cartKey = JSON.stringify(
     cart.map((item) => ({
       product_id: item.product_id || item.id,
@@ -100,9 +99,12 @@ export const PaymentPage = ({
 
         const items = JSON.parse(cartKey);
 
-        if (!items.length || items.some(
-          (item) => !item.product_id || item.quantity < 1
-        )) {
+        if (
+          !items.length ||
+          items.some(
+            (item) => !item.product_id || item.quantity < 1
+          )
+        ) {
           throw new Error(
             'Your cart is empty or contains an invalid item. Please return to your cart and try again.'
           );
@@ -146,8 +148,6 @@ export const PaymentPage = ({
         }
 
         intentsRef.current.push(data.payment_intent_id);
-
-        // Retain only the most recent few references.
         intentsRef.current = intentsRef.current.slice(-5);
 
         setQr({
@@ -178,7 +178,7 @@ export const PaymentPage = ({
     };
   }, [method, attempt, cartKey]);
 
-  // Check payment status only while a QR is available.
+  // Check payment status while a QR is available.
   useEffect(() => {
     if (
       method !== 'gcash' ||
@@ -689,14 +689,22 @@ export const PaymentPage = ({
                 Cash Received (₱)
               </label>
 
+              {/* Maximum 5 digits: ₱99,999 */}
               <input
                 id="cash-received"
-                type="number"
-                inputMode="decimal"
-                min="0"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={5}
                 value={cashReceived}
-                onChange={(event) => setCashReceived(event.target.value)}
-                placeholder="0.00"
+                onChange={(event) => {
+                  const value = event.target.value
+                    .replace(/\D/g, '')
+                    .slice(0, 5);
+
+                  setCashReceived(value);
+                }}
+                placeholder="Enter amount (max ₱99,999)"
                 style={{
                   fontSize: 'clamp(1.7rem, 6vw, 2rem)',
                   fontWeight: 800,
@@ -723,7 +731,7 @@ export const PaymentPage = ({
                   <button
                     type="button"
                     key={value}
-                    onClick={() => setCashReceived(String(value))}
+                    onClick={() => setCashReceived(String(value).slice(0, 5))}
                     style={{
                       minHeight: '44px',
                       padding: '10px 16px',
@@ -784,7 +792,7 @@ export const PaymentPage = ({
                   ? 'Enter the cash received'
                   : cashEnough
                   ? `Change: ${formatPeso(change)}`
-                 : `Still not enough: ${formatPeso(-change)}`}
+                  : `Still not enough: ${formatPeso(-change)}`}
               </div>
             </div>
           )}
