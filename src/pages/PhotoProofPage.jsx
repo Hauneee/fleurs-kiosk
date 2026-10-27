@@ -328,12 +328,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
           delivery and can be viewed later in Track My Order.
         </p>
 
-        {order?.order_number && (
-          <p className="fl-done__hint">
-            Order {order.order_number}
-          </p>
-        )}
-
+      
         <section className="fl-photo">
           {/* Hidden image picker */}
           <input

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -55,6 +54,7 @@ export const PaymentConfirmationPage = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [cashReceived, setCashReceived] = useState('');
 
   const submittingRef = useRef(false);
 
@@ -66,17 +66,28 @@ export const PaymentConfirmationPage = ({
   const exceedsItemLimit = itemCount > MAX_ITEMS;
   const isCartEmpty = itemCount === 0;
 
+  const total = Number(totalAmount);
+  const cashAmount = Number(cashReceived);
+
+  const validCash =
+    cashReceived.trim() !== '' &&
+    Number.isFinite(cashAmount) &&
+    cashAmount >= total &&
+    cashAmount >= 0;
+
+  const changeAmount = validCash ? cashAmount - total : 0;
+
   useEffect(() => {
     scrollToTop();
   }, []);
 
   const handleConfirm = async () => {
-    if (submittingRef.current) {
-      return;
-    }
+    if (submittingRef.current) return;
 
     if (isCartEmpty) {
-      setErrorMessage('Your cart is empty. Please add items before confirming your order.');
+      setErrorMessage(
+        'Your cart is empty. Please add items before confirming your order.'
+      );
       return;
     }
 
@@ -94,6 +105,13 @@ export const PaymentConfirmationPage = ({
       return;
     }
 
+    if (isCash && !validCash) {
+      setErrorMessage(
+        `Please enter a cash amount equal to or greater than ${formatPeso(total)}.`
+      );
+      return;
+    }
+
     submittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -105,7 +123,7 @@ export const PaymentConfirmationPage = ({
 
       completedOrder = await createOrder(
         {
-          total_amount: totalAmount,
+          total_amount: total,
           customer,
           payment_reference: isCash ? 'CASH' : paidRef,
           idempotency_key: idempotencyKey,
@@ -131,10 +149,13 @@ export const PaymentConfirmationPage = ({
       return;
     }
 
-    // The server confirmed the order.
-    // Keep the submit lock active while navigating away.
     try {
-      onOrderSuccess(completedOrder);
+      onOrderSuccess({
+        ...completedOrder,
+        payment_method: isCash ? 'Cash' : 'GCash',
+        amount_paid: isCash ? cashAmount : total,
+        change_amount: isCash ? changeAmount : 0,
+      });
     } catch (err) {
       console.error(
         'Order was created, but the confirmation callback failed:',
@@ -146,12 +167,9 @@ export const PaymentConfirmationPage = ({
           completedOrder.order_number
       );
 
-      // Keep the idempotency key and submit lock to help prevent duplicates.
       return;
     }
 
-    // Clear checkout keys only after successful order confirmation
-    // and successful navigation callback.
     sessionStorage.removeItem(PAY_REF_KEY);
     sessionStorage.removeItem(IDEMPOTENCY_KEY);
   };
@@ -241,10 +259,10 @@ export const PaymentConfirmationPage = ({
             }}
           >
             {isCash
-              ? 'Please confirm your order. Pay in cash to the staff.'
+              ? 'Enter the cash amount you will pay. The kiosk will calculate your change.'
               : paidRef
-              ? 'Payment received! Please confirm your order.'
-              : 'We could not find a confirmed payment. Please go back and try again.'}
+                ? 'Payment received! Please confirm your order.'
+                : 'We could not find a confirmed payment. Please go back and try again.'}
           </p>
 
           <div
@@ -278,9 +296,80 @@ export const PaymentConfirmationPage = ({
                 overflowWrap: 'anywhere',
               }}
             >
-              {formatPeso(totalAmount)}
+              {formatPeso(total)}
             </div>
           </div>
+
+          {isCash && (
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                textAlign: 'left',
+              }}
+            >
+              <label
+                htmlFor="cash-received"
+                style={{
+                  fontWeight: 800,
+                  color: COLORS.darkText,
+                }}
+              >
+                Cash amount received (₱)
+              </label>
+
+              <input
+                id="cash-received"
+                type="number"
+                min={total}
+                step="0.01"
+                inputMode="decimal"
+                placeholder="Enter cash amount"
+                value={cashReceived}
+                onChange={(event) => {
+                  setCashReceived(event.target.value);
+                  setErrorMessage(null);
+                }}
+                disabled={isSubmitting}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '14px',
+                  border: '2px solid #F8C9DA',
+                  borderRadius: '12px',
+                  fontSize: '1.1rem',
+                }}
+              />
+
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: '12px',
+                  background: COLORS.blush,
+                  color: COLORS.wine,
+                  fontWeight: 800,
+                }}
+              >
+                Sukli: {formatPeso(changeAmount)}
+              </div>
+
+              {cashReceived !== '' && !validCash && (
+                <p
+                  role="alert"
+                  style={{
+                    margin: 0,
+                    color: COLORS.darkPink,
+                    fontWeight: 700,
+                  }}
+                >
+                  Enter at least {formatPeso(total)}.
+                </p>
+              )}
+            </div>
+          )}
 
           {exceedsItemLimit && (
             <p
@@ -323,7 +412,8 @@ export const PaymentConfirmationPage = ({
                 disabled={
                   isSubmitting ||
                   isCartEmpty ||
-                  exceedsItemLimit
+                  exceedsItemLimit ||
+                  (isCash && !validCash)
                 }
               >
                 {isSubmitting
@@ -348,3 +438,5 @@ export const PaymentConfirmationPage = ({
     </div>
   );
 };
+
+export default PaymentConfirmationPage;

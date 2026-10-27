@@ -15,6 +15,12 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
+const formatPeso = (amount) =>
+  Number(amount ?? 0).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 export const OrderConfirmationPage = ({
   order,
   proofUrl,
@@ -34,26 +40,32 @@ export const OrderConfirmationPage = ({
           COLORS.white
         ]
       });
-    } catch (e) {
-      // Ignore if canvas is unavailable
+    } catch {
+      // Ignore if canvas is unavailable.
     }
   }, []);
 
   if (!order) return null;
 
-  
-const formattedDate = new Date(
-  order.created_at || Date.now()
-).toLocaleString('en-PH', {
-  timeZone: 'Asia/Manila',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true
-});
+  const formattedDate = new Date(
+    order.created_at || Date.now()
+  ).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
 
+  const paymentMethod = order.payment_method || 'Not available';
+
+  const amountPaid = Number(
+    order.amount_paid ?? order.total_amount ?? 0
+  );
+
+  const changeAmount = Number(order.change_amount ?? 0);
 
   return (
     <div className="fl-done">
@@ -63,7 +75,7 @@ const formattedDate = new Date(
         </div>
 
         <h1 className="fl-done__title">
-          Your order is placed
+          Your order is placed!
         </h1>
 
         <p className="fl-done__lead">
@@ -100,21 +112,38 @@ const formattedDate = new Date(
 
               <span>
                 ₱
-                {Number(
-                  item.subtotal ||
-                  item.unit_price * item.quantity
-                ).toLocaleString()}
+                {formatPeso(
+                  item.subtotal ??
+                  (
+                    Number(item.unit_price || 0) *
+                    Number(item.quantity || 0)
+                  )
+                )}
               </span>
             </div>
           ))}
 
           <div className="fl-done__total">
             <span>Total</span>
-
-            <span>
-              ₱{Number(order.total_amount).toLocaleString()}
-            </span>
+            <span>₱{formatPeso(order.total_amount)}</span>
           </div>
+
+          <div className="fl-done__row">
+            <span>Payment method</span>
+            <b>{paymentMethod}</b>
+          </div>
+
+          <div className="fl-done__row">
+            <span>Amount paid</span>
+            <b>₱{formatPeso(amountPaid)}</b>
+          </div>
+
+          {paymentMethod.toLowerCase() === 'cash' && (
+            <div className="fl-done__row">
+              <span>Sukli</span>
+              <b>₱{formatPeso(changeAmount)}</b>
+            </div>
+          )}
         </div>
 
         {proofUrl && (
@@ -160,3 +189,5 @@ const formattedDate = new Date(
     </div>
   );
 };
+
+export default OrderConfirmationPage;
