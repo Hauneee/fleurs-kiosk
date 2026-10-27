@@ -4,11 +4,12 @@ import { BowSvg } from './Decorations';
 import { getStockInfo } from '../utils/stock';
 
 export const ProductCard = ({ product, onSelect }) => {
-  const stockInfo = getStockInfo(product);
+  const stockInfo = product.stockInfo || getStockInfo(product);
   const { soldOut, low, qty } = stockInfo;
+  const stockUnknown = qty === null;
 
   const handleSelect = () => {
-    if (soldOut || (qty !== null && qty <= 0)) return;
+    if (soldOut || stockUnknown) return;
     onSelect?.(product);
   };
 
@@ -25,19 +26,18 @@ export const ProductCard = ({ product, onSelect }) => {
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
       role="button"
-      tabIndex={soldOut ? -1 : 0}
-      aria-disabled={soldOut}
+      tabIndex={soldOut || stockUnknown ? -1 : 0}
+      aria-disabled={soldOut || stockUnknown}
       style={{
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
         padding: '12px',
-        cursor: soldOut ? 'not-allowed' : 'pointer',
+        cursor: soldOut || stockUnknown ? 'not-allowed' : 'pointer',
         opacity: soldOut ? 0.7 : 1,
       }}
     >
-      {/* Decorative bow */}
       <div
         aria-hidden="true"
         style={{
@@ -51,61 +51,50 @@ export const ProductCard = ({ product, onSelect }) => {
         <BowSvg style={{ width: '42px', height: '26px' }} />
       </div>
 
-      {/* Price */}
       <div
         className="price-badge"
-        style={{
-          alignSelf: 'flex-end',
-          position: 'relative',
-          zIndex: 3,
-        }}
+        style={{ alignSelf: 'flex-end', position: 'relative', zIndex: 3 }}
       >
         ₱{Number(product.price).toLocaleString()}
       </div>
 
-      {/* STOCK NOTICE: directly above the image */}
-      {qty !== null && (
-        <div
-          role="status"
-          style={{
-            width: '100%',
-            padding: '10px 8px',
-            borderRadius: '10px',
-            boxSizing: 'border-box',
-            textAlign: 'center',
-            fontSize: '0.85rem',
-            fontWeight: 900,
-            background: soldOut
+      <div
+        role="status"
+        style={{
+          width: '100%',
+          padding: '10px 8px',
+          borderRadius: '10px',
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          fontSize: '0.85rem',
+          fontWeight: 900,
+          background: stockUnknown
+            ? '#e5e7eb'
+            : soldOut
               ? '#991b1b'
               : low
                 ? '#fff0c2'
                 : '#dcfce7',
-            color: soldOut
+          color: stockUnknown
+            ? '#374151'
+            : soldOut
               ? '#ffffff'
               : low
                 ? '#92400e'
                 : '#166534',
-            border: `1px solid ${
-              soldOut
-                ? '#991b1b'
-                : low
-                  ? '#f59e0b'
-                  : '#86efac'
-            }`,
-          }}
-        >
-          {soldOut ? '✕ OUT OF STOCK' : `⚠ ONLY ${qty} LEFT`}
-        </div>
-      )}
+          border: '1px solid #d1d5db',
+        }}
+      >
+        {stockUnknown
+          ? 'STOCK UNKNOWN'
+          : soldOut
+            ? 'OUT OF STOCK'
+            : `ONLY ${qty} LEFT`}
+      </div>
 
-      {/* Product image */}
       <div
         className="image-frame"
-        style={{
-          width: '100%',
-          overflow: 'hidden',
-          position: 'relative',
-        }}
+        style={{ width: '100%', overflow: 'hidden', position: 'relative' }}
       >
         {product.image_url ? (
           <img
@@ -125,26 +114,24 @@ export const ProductCard = ({ product, onSelect }) => {
         )}
       </div>
 
-      {/* Product name */}
       <h3 className="product-title" style={{ margin: 0 }}>
         {product.name}
       </h3>
 
-      {/* Stock count */}
-      {qty !== null && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.85rem',
-            fontWeight: 700,
-            color: soldOut ? '#991b1b' : low ? '#92400e' : '#166534',
-          }}
-        >
-          {soldOut
+      <p
+        style={{
+          margin: 0,
+          fontSize: '0.85rem',
+          fontWeight: 700,
+          color: stockUnknown || soldOut ? '#991b1b' : low ? '#92400e' : '#166534',
+        }}
+      >
+        {stockUnknown
+          ? 'Stock information unavailable'
+          : soldOut
             ? 'Currently unavailable'
             : `${qty} ${qty === 1 ? 'item' : 'items'} remaining`}
-        </p>
-      )}
+      </p>
 
       <div
         style={{
@@ -152,10 +139,14 @@ export const ProductCard = ({ product, onSelect }) => {
           textAlign: 'center',
           fontSize: '0.8rem',
           fontWeight: 800,
-          color: soldOut ? '#991b1b' : '#3b82f6',
+          color: soldOut || stockUnknown ? '#991b1b' : '#3b82f6',
         }}
       >
-        {soldOut ? 'UNAVAILABLE' : 'TAP TO SELECT'}
+        {soldOut
+          ? 'OUT OF STOCK'
+          : stockUnknown
+            ? 'UNAVAILABLE'
+            : 'TAP TO SELECT'}
       </div>
     </div>
   );
