@@ -670,17 +670,17 @@
                     </div>
                   </td>
 
-                  <td><strong>${esc(p.category || "Other")}</strong></td>
-                  <td>${esc(money(p.price))}</td>
-                  <td><strong>${stock}</strong></td>
+                  <td data-label="Category"><strong>${esc(p.category || "Other")}</strong></td>
+                  <td data-label="Price">${esc(money(p.price))}</td>
+                  <td data-label="Current stock"><strong>${stock}</strong></td>
 
-                  <td>
+                  <td data-label="Status">
                     <span class="inventory-badge ${status.className}">
                       ${status.label}
                     </span>
                   </td>
 
-                  <td>
+                  <td data-label="Stock &amp; actions">
                     <form class="inventory-update-form"
                       data-inventory-form="${esc(p.id)}"
                       style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -2353,24 +2353,56 @@
     style.id = "pmStyles";
 
     style.textContent = `
-      .pm-overlay{position:fixed;inset:0;z-index:1000;background:rgba(40,32,36,.5);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+      .pm-overlay{position:fixed;inset:0;z-index:1000;background:rgba(40,32,36,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
       .pm-overlay[hidden]{display:none !important}
-      .pm-panel{background:#fff;color:#302a2b;width:100%;max-width:480px;border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:92vh;overflow-y:auto}
-      .pm-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
-      .pm-head h2{margin:0;font-size:20px}
-      .pm-close{border:0;background:transparent;font-size:28px;line-height:1;cursor:pointer;color:#898184}
-      .pm-field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-      .pm-field label{font-size:13px;font-weight:600}
-      .pm-field input,.pm-field select{padding:10px 12px;border:1px solid #e3dad9;border-radius:10px;font:inherit;background:#fff;color:inherit;width:100%;box-sizing:border-box}
+      .pm-panel{position:relative;background:#fff;color:#302a2b;width:100%;max-width:520px;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.28);max-height:92vh;overflow-y:auto;padding:0}
+      .pm-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:20px 22px 14px;background:#fff;border-bottom:1px solid #f0e9e8}
+      .pm-head h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
+      .pm-head .muted{margin-top:3px;font-size:13px;color:#898184}
+      .pm-close{flex:none;width:34px;height:34px;border:0;border-radius:50%;background:#f6f1f0;font-size:22px;line-height:1;cursor:pointer;color:#6f676a;transition:background .15s}
+      .pm-close:hover{background:#eee5e4}
+      #pmForm{padding:18px 22px 0}
+      .pm-field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+      .pm-field label{font-size:13px;font-weight:600;color:#4a4244}
+      .pm-req{color:#c0495d;margin-left:2px}
+      .pm-field input,.pm-field select{padding:11px 13px;border:1.5px solid #e3dad9;border-radius:12px;font:inherit;font-size:15px;background:#fff;color:inherit;width:100%;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
+      .pm-field input::placeholder{color:#b3a9ab}
+      .pm-field input:focus,.pm-field select:focus{outline:none;border-color:#c4466a;box-shadow:0 0 0 3px rgba(196,70,106,.28)}
       .pm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
       .pm-photo-actions{display:flex;gap:8px;flex-wrap:wrap}
-      .pm-preview{display:flex;align-items:center;justify-content:center;width:100%;height:200px;margin-top:6px;border:1px dashed #e3dad9;border-radius:12px;background:#fcfaf9;overflow:hidden;color:#898184;font-size:13px}
+      .pm-hint{font-size:12px;color:#898184}
+      .pm-preview{display:flex;align-items:center;justify-content:center;width:100%;height:190px;margin-top:2px;border:1.5px dashed #dccfce;border-radius:14px;background:#fcfaf9;overflow:hidden;color:#a0979a;font-size:13px}
       .pm-preview img{width:100%;height:100%;object-fit:contain}
-      .pm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
-      .pm-msg{padding:10px 12px;border-radius:10px;font-size:13px;margin-top:4px}
+      .pm-actions{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;margin-top:6px;padding:14px 0 18px;background:#fff;border-top:1px solid #f0e9e8}
+      .pm-btn{padding:10px 18px;border:1.5px solid #e3dad9;border-radius:12px;background:#fff;color:#302a2b;font:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,transform .05s}
+      .pm-btn:hover{background:#faf6f5;border-color:#d8cbca}
+      .pm-btn:active{transform:translateY(1px)}
+      .pm-btn:disabled{opacity:.6;cursor:not-allowed}
+      .pm-btn-small{padding:8px 13px;font-size:13px}
+      .pm-btn-primary{background:#c4466a !important;border-color:#c4466a !important;color:#fff !important;min-width:140px;box-shadow:0 2px 8px rgba(196,70,106,.35)}
+      .pm-btn-primary:hover{background:#a8365a !important;border-color:#a8365a !important}
+      .pm-msg{padding:10px 12px;border-radius:10px;font-size:13px;margin:0 0 12px}
       .pm-msg[hidden]{display:none !important}
       .pm-msg.error{background:#fde8e8;color:#a93f4c}
       .pm-msg.info{background:#eef3fb;color:#3863a7}
+      #addProductButton{background:#c4466a !important;color:#fff !important;border:0 !important;box-shadow:0 2px 8px rgba(196,70,106,.35);border-radius:12px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;transition:background .15s}
+      #addProductButton:hover{background:#a8365a !important}
+      .inventory-data-table td{vertical-align:middle}
+      @media (min-width:761px){
+        .inventory-data-table th:nth-child(4),
+        .inventory-data-table td:nth-child(4),
+        .inventory-data-table th:nth-child(5),
+        .inventory-data-table td:nth-child(5){text-align:center !important}
+        .inventory-data-table td:nth-child(4) strong{display:inline-block;min-width:32px;font-size:15px}
+      }
+      .inventory-data-table .inventory-badge{display:inline-flex !important;align-items:center;justify-content:center;min-width:104px;padding:6px 14px;white-space:nowrap;line-height:1.2}
+      @media (max-width:520px){
+        .pm-overlay{align-items:flex-end;padding:0}
+        .pm-panel{max-width:none;border-radius:18px 18px 0 0;max-height:94vh}
+        .pm-actions{flex-direction:column-reverse}
+        .pm-actions .pm-btn{width:100%}
+        .pm-field input,.pm-field select{font-size:16px}
+      }
     `;
 
     document.head.appendChild(style);
@@ -2401,13 +2433,13 @@
 
         <form id="pmForm" novalidate>
           <div class="pm-field">
-            <label for="pmName">Product name</label>
+            <label for="pmName">Product name <span class="pm-req">*</span></label>
             <input id="pmName" type="text" maxlength="120"
                    placeholder="Enter product name" required>
           </div>
 
           <div class="pm-field">
-            <label for="pmCategory">Category</label>
+            <label for="pmCategory">Category <span class="pm-req">*</span></label>
             <select id="pmCategory" required>
               <option value="">Select category</option>
               ${PRODUCT_FORM_CATEGORIES.map(c =>
@@ -2418,7 +2450,7 @@
 
           <div class="pm-row">
             <div class="pm-field">
-              <label for="pmPrice">Price (₱)</label>
+              <label for="pmPrice">Price (₱) <span class="pm-req">*</span></label>
               <input id="pmPrice" type="number" min="0.01" step="0.01"
                      inputmode="decimal" placeholder="0.00" required>
             </div>
@@ -2434,9 +2466,9 @@
             <label>Photo</label>
 
             <div class="pm-photo-actions">
-              <button type="button" class="btn small-btn"
+              <button type="button" class="pm-btn pm-btn-small"
                       id="pmGalleryBtn">📁 Choose photo</button>
-              <button type="button" class="btn small-btn"
+              <button type="button" class="pm-btn pm-btn-small"
                       id="pmCameraBtn">📷 Take photo</button>
             </div>
 
@@ -2446,13 +2478,14 @@
                    capture="environment" style="display:none">
 
             <div class="pm-preview" id="pmPreview">No photo yet</div>
+            <div class="pm-hint">JPG or PNG, up to 15 MB. Photos are resized automatically.</div>
           </div>
 
           <div id="pmMessage" class="pm-msg" hidden></div>
 
           <div class="pm-actions">
-            <button type="button" class="btn" id="pmCancel">Cancel</button>
-            <button type="submit" class="btn primary"
+            <button type="button" class="pm-btn" id="pmCancel">Cancel</button>
+            <button type="submit" class="pm-btn pm-btn-primary"
                     id="pmSave">Save product</button>
           </div>
         </form>
@@ -2926,6 +2959,16 @@
         products[index] = { ...products[index], is_active: false };
       }
 
+      // Remove the row right away, then rebuild the table and counters.
+      try {
+        document
+          .querySelector(`[data-inventory-form="${CSS.escape(String(productId))}"]`)
+          ?.closest("tr")
+          ?.remove();
+      } catch (error) {
+        /* the full re-render below covers this */
+      }
+
       renderInventory();
 
       inventoryMessage(
@@ -2945,6 +2988,62 @@
 
       notify("Delete failed.", "error");
     }
+  }
+
+  // REALTIME: keeps Products & Inventory in sync across tabs and devices.
+  // Needs the products table in the supabase_realtime publication.
+  let productsChannel = null;
+
+  function startProductsRealtime() {
+    if (!sb || productsChannel) return;
+
+    productsChannel = sb
+      .channel("admin-products-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        payload => {
+          const row = payload.new;
+          const old = payload.old;
+
+          if (payload.eventType === "DELETE") {
+            products = products.filter(p => String(p.id) !== String(old?.id));
+          } else if (row && row.id !== undefined) {
+            const index = products.findIndex(
+              p => String(p.id) === String(row.id)
+            );
+
+            if (index === -1) {
+              products.push(row);
+            } else {
+              products[index] = { ...products[index], ...row };
+            }
+          }
+
+          // Don't wipe a stock number someone is typing right now.
+          const typing = document.activeElement?.closest?.("#inventoryTable") &&
+            document.activeElement.tagName === "INPUT";
+
+          if (!typing) renderInventory();
+        }
+      )
+      .subscribe(status => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("Products realtime status:", status);
+        }
+      });
+  }
+
+  async function stopProductsRealtime() {
+    if (!sb || !productsChannel) return;
+
+    try {
+      await sb.removeChannel(productsChannel);
+    } catch (error) {
+      console.warn("Could not remove products channel:", error);
+    }
+
+    productsChannel = null;
   }
 
   function setupProductManager() {
@@ -3022,6 +3121,7 @@
       setAdminEmail(data.user?.email);
 
       await refreshAll();
+      startProductsRealtime();
     } catch (error) {
       $("loginMessage").textContent =
         error?.message || "Sign-in failed.";
@@ -3104,6 +3204,8 @@
         notify("Could not sign out: " + error.message, "error");
         return;
       }
+
+      await stopProductsRealtime();
 
       orders = [];
       feedback = [];
@@ -3224,6 +3326,19 @@
     }
   });
 
+  // Close the mobile sidebar when tapping outside it
+  document.addEventListener("click", event => {
+    const side = $("sidebar");
+
+    if (
+      side.classList.contains("open") &&
+      !event.target.closest("#sidebar") &&
+      !event.target.closest("#menuButton")
+    ) {
+      side.classList.remove("open");
+    }
+  });
+
   // VIEW DETAILS BUTTONS FOR ORDERS AND CUSTOMERS
   document.addEventListener("click", event => {
     const button = event.target.closest("[data-view-order]");
@@ -3280,6 +3395,7 @@
         setAdminEmail(data.session.user?.email);
 
         await refreshAll();
+        startProductsRealtime();
       }
     });
   }
