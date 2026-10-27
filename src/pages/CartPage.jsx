@@ -1,14 +1,16 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Header } from '../components/Header';
 import { CartItem } from '../components/CartItem';
 import { Button } from '../components/Button';
 import {
   ShoppingBag,
   ArrowLeft,
-  ArrowRight
+  AlertTriangle
 } from 'lucide-react';
 import '../styles/light.css';
+
+const MAX_ITEMS = 10;
 
 export const CartPage = ({
   cart = [],
@@ -17,6 +19,16 @@ export const CartPage = ({
   onContinueShopping,
   onProceed
 }) => {
+  const [notice, setNotice] = useState('');
+
+  const totalItems = cart.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.quantity) || 0),
+    0
+  );
+
+  const isAtLimit = totalItems >= MAX_ITEMS;
+  const isOverLimit = totalItems > MAX_ITEMS;
+
   const totalAmount = cart.reduce((sum, item) => {
     const price = Number(item.price) || 0;
     const quantity = Number(item.quantity) || 0;
@@ -29,6 +41,25 @@ export const CartPage = ({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     })}`;
+
+  const handleCheckout = () => {
+    if (totalItems > MAX_ITEMS) {
+      setNotice(
+        `Maximum of ${MAX_ITEMS} items per order only. Please remove ${
+          totalItems - MAX_ITEMS
+        } item(s) before checkout.`
+      );
+      return;
+    }
+
+    if (totalItems === 0) {
+      setNotice('Please add an item before checkout.');
+      return;
+    }
+
+    setNotice('');
+    onProceed?.();
+  };
 
   return (
     <div className="fl-light fl-page">
@@ -64,13 +95,88 @@ export const CartPage = ({
           </div>
         ) : (
           <div className="fl-cart">
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                padding: '12px 16px',
+                marginBottom: '16px',
+                borderRadius: '10px',
+                background: isOverLimit
+                  ? '#FEE2E2'
+                  : isAtLimit
+                    ? '#FEF3C7'
+                    : '#DCFCE7',
+                color: isOverLimit
+                  ? '#991B1B'
+                  : isAtLimit
+                    ? '#92400E'
+                    : '#166534'
+              }}
+            >
+              <strong>
+                {totalItems}/{MAX_ITEMS} items
+              </strong>
+              <p style={{ margin: '4px 0 0' }}>
+                {isOverLimit
+                  ? `Maximum of ${MAX_ITEMS} items per order only. Remove ${
+                      totalItems - MAX_ITEMS
+                    } item(s) to continue.`
+                  : isAtLimit
+                    ? `You've reached the maximum of ${MAX_ITEMS} items per order.`
+                    : `${MAX_ITEMS - totalItems} more item(s) available.`}
+              </p>
+            </div>
+
+            {notice && (
+              <div
+                role="alert"
+                style={{
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  borderRadius: '10px',
+                  background: '#FEE2E2',
+                  color: '#991B1B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <AlertTriangle size={20} />
+                <span>{notice}</span>
+              </div>
+            )}
+
             <div className="fl-cart__list">
               {cart.map((item) => (
                 <CartItem
                   key={item.id}
                   item={item}
-                  onUpdateQuantity={onUpdateQuantity}
-                  onRemove={onRemoveItem}
+                  onUpdateQuantity={(id, quantity) => {
+                    const otherItems = cart
+                      .filter((cartItem) => cartItem.id !== id)
+                      .reduce(
+                        (sum, cartItem) =>
+                          sum + (Number(cartItem.quantity) || 0),
+                        0
+                      );
+
+                    if (
+                      otherItems + Number(quantity) > MAX_ITEMS
+                    ) {
+                      setNotice(
+                        `Maximum of ${MAX_ITEMS} items per order only.`
+                      );
+                      return;
+                    }
+
+                    setNotice('');
+                    onUpdateQuantity(id, quantity);
+                  }}
+                  onRemove={(id) => {
+                    setNotice('');
+                    onRemoveItem(id);
+                  }}
                 />
               ))}
             </div>
@@ -78,29 +184,29 @@ export const CartPage = ({
             <div className="fl-total">
               <div className="fl-total__row">
                 <span>Total</span>
-
                 <span className="fl-total__value">
                   {formatPrice(totalAmount)}
                 </span>
               </div>
 
-<div className="fl-total__actions">
-  <Button
-    variant="navy"
-    size="lg"
-    onClick={onContinueShopping}
-  >
-    Continue shopping
-  </Button>
+              <div className="fl-total__actions">
+                <Button
+                  variant="navy"
+                  size="lg"
+                  onClick={onContinueShopping}
+                >
+                  Continue shopping
+                </Button>
 
-  <Button
-    variant="accent"
-    size="lg"
-    onClick={onProceed}
-  >
-    Checkout
-  </Button>
-</div>
+                <Button
+                  variant="accent"
+                  size="lg"
+                  onClick={handleCheckout}
+                  disabled={isOverLimit || totalItems === 0}
+                >
+                  Checkout
+                </Button>
+              </div>
             </div>
           </div>
         )}
