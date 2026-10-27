@@ -176,7 +176,7 @@ export const PaymentConfirmationPage = ({
               </p>
 
               <p style={{ margin: '0 0 8px', fontWeight: 700 }}>
-                Sukli
+                Exchange
               </p>
               <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>
                 {formatPeso(change)}
