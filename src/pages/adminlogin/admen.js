@@ -634,8 +634,7 @@
               <th>Price</th>
               <th>Current stock</th>
               <th>Status</th>
-              <th>Update stock</th>
-              <th>Edit</th>
+              <th>Stock &amp; actions</th>
             </tr>
           </thead>
           <tbody>
@@ -683,7 +682,8 @@
 
                   <td>
                     <form class="inventory-update-form"
-                      data-inventory-form="${esc(p.id)}">
+                      data-inventory-form="${esc(p.id)}"
+                      style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                       <input
                         class="inventory-stock-input"
                         type="number"
@@ -699,15 +699,18 @@
                         type="submit"
                         data-stock-save="${esc(p.id)}"
                       >Save</button>
+                      <button
+                        class="btn small-btn"
+                        type="button"
+                        data-edit-product="${esc(p.id)}"
+                      >Edit</button>
+                      <button
+                        class="btn small-btn"
+                        type="button"
+                        data-delete-product="${esc(p.id)}"
+                        style="background:#a93f4c;color:white;"
+                      >Delete</button>
                     </form>
-                  </td>
-
-                  <td>
-                    <button
-                      class="btn small-btn"
-                      type="button"
-                      data-edit-product="${esc(p.id)}"
-                    >Edit</button>
                   </td>
                 </tr>
               `;
@@ -2872,6 +2875,78 @@
     }
   }
 
+  // DELETE PRODUCT (soft delete: sets is_active = false so order history is kept)
+  async function deleteProduct(productId) {
+    const product = products.find(
+      p => String(p.id) === String(productId)
+    );
+
+    if (!product) {
+      notify("Product not found. Refresh and try again.", "error");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Delete "${product.name}"?\n\n` +
+      "It will be removed from active inventory. Existing order history is kept."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await sb.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      if (!sessionData.session) {
+        throw new Error("Please sign in again.");
+      }
+
+      const { data, error } = await sb
+        .from("products")
+        .update({ is_active: false })
+        .eq("id", productId)
+        .select("id, name, is_active")
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        throw new Error(
+          "Product was not deleted. Supabase blocked the change (missing UPDATE permission on the products table for this account)."
+        );
+      }
+
+      const index = products.findIndex(
+        p => String(p.id) === String(productId)
+      );
+
+      if (index !== -1) {
+        products[index] = { ...products[index], is_active: false };
+      }
+
+      renderInventory();
+
+      inventoryMessage(
+        `${data.name} was removed from active inventory.`,
+        "success"
+      );
+
+      notify("Product deleted.", "success");
+    } catch (error) {
+      console.error("Delete product failed:", error);
+
+      inventoryMessage(
+        "Could not delete product: " +
+          (error?.message || String(error)),
+        "error"
+      );
+
+      notify("Delete failed.", "error");
+    }
+  }
+
   function setupProductManager() {
     injectProductStyles();
     ensureProductModal();
@@ -2902,9 +2977,17 @@
 
     if ($("inventoryTable")) {
       $("inventoryTable").addEventListener("click", event => {
-        const button = event.target.closest("[data-edit-product]");
+        const editBtn = event.target.closest("[data-edit-product]");
+        const deleteBtn = event.target.closest("[data-delete-product]");
 
-        if (button) openProductForm(button.dataset.editProduct);
+        if (editBtn) {
+          openProductForm(editBtn.dataset.editProduct);
+          return;
+        }
+
+        if (deleteBtn) {
+          deleteProduct(deleteBtn.dataset.deleteProduct);
+        }
       });
     }
   }
@@ -3177,12 +3260,12 @@
     $("loginMessage").textContent =
       "Supabase library did not load. Check the Supabase script in admin.html.";
   } else {
-   sb = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+    sb = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
 
-window.adminSupabase = sb;
+    window.adminSupabase = sb;
 
     sb.auth.getSession().then(async ({ data, error }) => {
       if (error) {

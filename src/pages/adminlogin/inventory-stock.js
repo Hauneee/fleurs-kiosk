@@ -1,7 +1,9 @@
+
 /* Fleurs Kiosk — Inventory & Stock module
    Add <script src="inventory-stock.js"></script> after admen.js in admin.html.
-   Requires the existing admin Supabase client to be available as window.sb or window.supabaseClient.
-   This module injects its own Inventory & Stock navigation and page. */
+   Requires the existing admin Supabase client as window.sb or window.supabaseClient.
+   Includes automatic Supabase Realtime updates for products.
+*/
 (() => {
   'use strict';
 
@@ -26,6 +28,10 @@
   let supabase = window.sb || window.supabaseClient || null;
   let products = [];
   let busy = false;
+  let inventoryRealtimeChannel = null;
+  let inventoryReloadTimer = null;
+  let loading = false;
+  let reloadQueued = false;
 
   function toast(message, type = 'info') {
     const existing = $('toast');
@@ -38,7 +44,6 @@
         '#36303b';
 
       existing.classList.remove('hidden');
-
       clearTimeout(toast._timer);
 
       toast._timer = setTimeout(() => {
@@ -133,7 +138,7 @@
 
       .inv-btn:disabled {
         opacity: .5;
-        cursor: wait;
+        cursor: not-allowed;
       }
 
       .inv-stock {
@@ -285,7 +290,7 @@
         navContainer.appendChild(nav);
       }
 
-      nav.addEventListener('click', () => showInventoryPage());
+      nav.addEventListener('click', showInventoryPage);
     }
   }
 
@@ -394,7 +399,7 @@
             const stock = Math.max(0, Number(p.stock) || 0);
             const s = status(stock);
 
-            const disabled =
+            const inactive =
               p.is_active === false
                 ? ' disabled title="Inactive product"'
                 : '';
@@ -407,7 +412,6 @@
                 </td>
 
                 <td>${esc(p.category || 'Other')}</td>
-
                 <td>${esc(peso(p.price))}</td>
 
                 <td>
@@ -427,14 +431,14 @@
                       class="inv-btn"
                       data-inv-action="add"
                       data-product-id="${esc(p.id)}"
-                      ${disabled}
+                      ${inactive}
                     >＋ Add</button>
 
                     <button
                       class="inv-btn"
                       data-inv-action="reduce"
                       data-product-id="${esc(p.id)}"
-                      ${disabled || (stock === 0 ? ' disabled' : '')}
+                      ${inactive || (stock === 0 ? ' disabled' : '')}
                     >− Reduce</button>
                   </div>
                 </td>
@@ -447,9 +451,18 @@
   }
 
   async function load() {
+    if (loading) {
+      reloadQueued = true;
+      return;
+    }
+
+    loading = true;
+
     try {
-      $('inventoryTable').innerHTML =
-        '<div class="empty">Loading inventory…</div>';
+      if ($('inventoryTable')) {
+        $('inventoryTable').innerHTML =
+          '<div class="empty">Loading inventory…</div>';
+      }
 
       const { data, error } = await getClient()
         .from('products')
@@ -462,21 +475,29 @@
       if (error) throw error;
 
       products = data || [];
-
       render();
     } catch (error) {
       console.error('Inventory load failed:', error);
 
-      $('inventoryTable').innerHTML = `
-        <div class="notice error">
-          Could not load products: ${esc(error.message || error)}
-        </div>
-      `;
+      if ($('inventoryTable')) {
+        $('inventoryTable').innerHTML = `
+          <div class="notice error">
+            Could not load products: ${esc(error.message || error)}
+          </div>
+        `;
+      }
 
       toast(
         'Could not load inventory. Check Supabase permissions.',
         'error'
       );
+    } finally {
+      loading = false;
+
+      if (reloadQueued) {
+        reloadQueued = false;
+        load();
+      }
     }
   }
 
@@ -504,7 +525,6 @@
     }
 
     const verb = action === 'add' ? 'add to' : 'reduce from';
-
     const raw = prompt(
       `How many units do you want to ${verb} “${product.name}”?`,
       '1'
@@ -528,10 +548,9 @@
       );
     }
 
-    const next =
-      action === 'add'
-        ? current + amount
-        : current - amount;
+    const next = action === 'add'
+      ? current + amount
+      : current - amount;
 
     if (!Number.isSafeInteger(next) || next < 0) {
       return toast('That stock quantity is invalid.', 'error');
@@ -547,8 +566,8 @@
     render();
 
     try {
-      // Compare-and-set avoids overwriting a stock value
-      // changed since it was loaded.
+      // Compare-and-set prevents overwriting a stock value
+      // changed after this inventory list was loaded.
       const { data, error } = await getClient()
         .from('products')
         .update({ stock: next })
@@ -566,13 +585,15 @@
       }
 
       product.stock = Number(data.stock);
-
       render();
 
       toast(
         `Stock updated: ${product.name} now has ${data.stock} unit(s).`,
         'success'
       );
+
+      // Reconcile with the latest database values.
+      await load();
     } catch (error) {
       console.error('Stock adjustment failed:', error);
 
@@ -585,6 +606,39 @@
     } finally {
       busy = false;
       render();
+    }
+  }
+
+  function startInventoryRealtime() {
+    try {
+      const client = getClient();
+
+      if (inventoryRealtimeChannel) return;
+
+      inventoryRealtimeChannel = client
+        .channel('inventory-stock-live-sync')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'products'
+          },
+          () => {
+            // Refetch the complete product list so inserts, updates,
+            // and deletes are reflected consistently.
+            clearTimeout(inventoryReloadTimer);
+
+            inventoryReloadTimer = setTimeout(() => {
+              load();
+            }, 250);
+          }
+        )
+        .subscribe((state) => {
+          console.log('[Inventory Realtime]', state);
+        });
+    } catch (error) {
+      console.error('Inventory Realtime setup failed:', error);
     }
   }
 
@@ -633,8 +687,6 @@
       }
     });
 
-    // Handle navigation clicks even if the original admin
-    // navigation is initialized after this module.
     document.addEventListener('click', event => {
       const button = event.target.closest(
         '.nav-btn[data-page="inventory"]'
@@ -644,6 +696,11 @@
         showInventoryPage();
       }
     });
+
+    // Keep the inventory synchronized with changes from other sessions.
+    startInventoryRealtime();
+
+    load();
   }
 
   if (document.readyState === 'loading') {
