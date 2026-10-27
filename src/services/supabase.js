@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { INITIAL_PRODUCTS } from '../data/defaultProducts';
 import { getPaymentInfo } from '../utils/paymentInfo';
@@ -150,10 +149,7 @@ export const fetchProducts = async (category = null) => {
 
       return data || [];
     } catch (err) {
-      console.warn(
-        'Supabase products fetch failed:',
-        err.message
-      );
+      console.warn('Supabase products fetch failed:', err.message);
     }
   }
 
@@ -312,8 +308,6 @@ export const seedDefaultProducts = async () => {
 
 // ===============================
 // CREATE ORDER
-// Online: Supabase RPC with idempotency
-// Offline: local demo fallback
 // ===============================
 
 export const createOrder = async (orderPayload, items) => {
@@ -332,7 +326,7 @@ export const createOrder = async (orderPayload, items) => {
   const paymentInfo = getPaymentInfo();
 
   const paymentMethod = String(
-    paymentInfo?.method || ''
+    paymentInfo?.method || orderPayload?.payment_method || ''
   )
     .trim()
     .toLowerCase();
@@ -346,6 +340,14 @@ export const createOrder = async (orderPayload, items) => {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Your cart is empty.');
   }
+
+  const totalAmount = Number(orderPayload?.total_amount) || 0;
+  const amountPaid =
+    Number(orderPayload?.amount_paid) ||
+    (paymentMethod === 'gcash' ? totalAmount : 0);
+  const changeAmount =
+    Number(orderPayload?.change_amount) ||
+    Math.max(0, amountPaid - totalAmount);
 
   const orderItems = items.map((item) => {
     const productId = item.product_id || item.id;
@@ -384,24 +386,13 @@ export const createOrder = async (orderPayload, items) => {
     }
 
     const paymentReference =
-      orderPayload.payment_reference || null;
+      orderPayload?.payment_reference || null;
 
     const controller = new AbortController();
     let timeoutId;
     let requestTimedOut = false;
 
     try {
-      console.log(
-        '[FLEURS DEBUG] Creating order through Supabase RPC'
-      );
-      console.log(
-        '[FLEURS DEBUG] Payment method:',
-        paymentMethod
-      );
-      console.log(
-        '[FLEURS DEBUG] Calling create_kiosk_order RPC'
-      );
-
       timeoutId = setTimeout(() => {
         requestTimedOut = true;
         controller.abort();
@@ -420,20 +411,12 @@ export const createOrder = async (orderPayload, items) => {
         .abortSignal(controller.signal);
 
       if (error) {
-        console.error(
-          '[FLEURS DEBUG] Supabase RPC error:',
-          error
-        );
-
+        console.error('[FLEURS DEBUG] Supabase RPC error:', error);
         throw new Error(error.message);
       }
 
-      console.log(
-        '[FLEURS DEBUG] Raw RPC response:',
-        data
-      );
+      console.log('[FLEURS DEBUG] Raw RPC response:', data);
 
-      // Support either a JSON object or a one-row array.
       const result = Array.isArray(data) ? data[0] : data;
 
       if (
@@ -441,23 +424,18 @@ export const createOrder = async (orderPayload, items) => {
         typeof result !== 'object' ||
         !result.order_number
       ) {
-        console.error(
-          '[FLEURS DEBUG] Unexpected RPC response:',
-          data
-        );
-
         throw new Error(
           'The server response did not contain an order number. Check the return value of create_kiosk_order.'
         );
       }
 
-      console.log(
-        '[FLEURS DEBUG] Order created:',
-        result.order_number
-      );
-
       return {
         ...result,
+        order_number: result.order_number,
+        total_amount: Number(result.total_amount ?? totalAmount),
+        payment_method: result.payment_method || paymentMethod,
+        amount_paid: Number(result.amount_paid ?? amountPaid),
+        change_amount: Number(result.change_amount ?? changeAmount),
         status: result.status || 'pending',
         payment_status:
           result.payment_status ||
@@ -465,19 +443,12 @@ export const createOrder = async (orderPayload, items) => {
       };
     } catch (err) {
       if (requestTimedOut) {
-        console.error(
-          '[FLEURS DEBUG] Order RPC timed out after 30 seconds.'
-        );
-
         throw new Error(
           'The order request timed out. Your order may still have been saved. Please check your orders before trying again.'
         );
       }
 
-      console.error(
-        '[FLEURS DEBUG] Order creation failed:',
-        err
-      );
+      console.error('[FLEURS DEBUG] Order creation failed:', err);
 
       throw new Error(
         `Unable to create order: ${
@@ -485,9 +456,7 @@ export const createOrder = async (orderPayload, items) => {
         }`
       );
     } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
@@ -503,32 +472,53 @@ export const createOrder = async (orderPayload, items) => {
   const fallbackOrder = {
     id: `ord-${Date.now()}`,
     order_number: orderNumber,
+
+    customer: {
+      name: customer.name.trim(),
+      email: customer.email.trim(),
+      phone: customer.phone.trim(),
+    },
+
     customer_name: customer.name.trim(),
     customer_email: customer.email.trim(),
     customer_phone: customer.phone.trim(),
-    total_amount: Number(orderPayload.total_amount) || 0,
+
+    total_amount: totalAmount,
+    amount_paid: amountPaid,
+    change_amount: changeAmount,
+
     status: 'pending',
     payment_status:
       paymentMethod === 'cash' ? 'pending' : 'paid',
     payment_method: paymentMethod,
-    payment_reference: orderPayload.payment_reference || null,
-    idempotency_key: orderPayload.idempotency_key || null,
+    payment_reference: orderPayload?.payment_reference || null,
+    idempotency_key: orderPayload?.idempotency_key || null,
     created_at: now,
-    order_items: items.map((item) => ({
-      id: `item-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 6)}`,
-      product_id: item.product_id || item.id,
-      product_name: item.name,
-      quantity: Number(item.quantity),
-      unit_price: Number(item.price),
-      subtotal:
-        Number(item.price) * Number(item.quantity),
-    })),
+
+    items: items.map((item) => {
+      const quantity = Number(item.quantity) || 1;
+      const unitPrice = Number(item.price) || 0;
+      const lineTotal = unitPrice * quantity;
+      const productName =
+        item.product_name || item.name || 'Unnamed Product';
+
+      return {
+        id: `item-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 6)}`,
+        product_id: item.product_id || item.id,
+        product_name: productName,
+        name: productName,
+        quantity,
+        unit_price: unitPrice,
+        price: unitPrice,
+        subtotal: lineTotal,
+        line_total: lineTotal,
+      };
+    }),
   };
 
   const localOrders = getLocalOrders();
-
   localOrders.unshift(fallbackOrder);
   saveLocalOrders(localOrders);
 
@@ -581,10 +571,15 @@ export const trackOrder = async (orderNumber) => {
     payment_method: match.payment_method,
     total_amount: match.total_amount,
     created_at: match.created_at,
-    order_items: (match.order_items || []).map((item) => ({
-      product_name: item.product_name,
+    order_items: (match.order_items || match.items || []).map((item) => ({
+      product_name:
+        item.product_name || item.name || 'Unnamed Product',
       quantity: item.quantity,
-      subtotal: item.subtotal,
+      subtotal:
+        item.subtotal ??
+        item.line_total ??
+        (Number(item.unit_price ?? item.price) || 0) *
+          (Number(item.quantity) || 1),
     })),
   };
 };
