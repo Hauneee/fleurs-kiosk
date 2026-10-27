@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
 import { BouquetPage } from './pages/BouquetPage';
@@ -8,14 +8,21 @@ import { TripleFlowerPage } from './pages/TripleFlowerPage';
 import { CartPage } from './pages/CartPage';
 import { CustomerInfoPage } from './pages/CustomerInfoPage';
 import { PaymentPage } from './pages/PaymentPage';
-import { PaymentConfirmationPage } from './pages/PaymentConfirmationPage';
 import { PhotoProofPage } from './pages/PhotoProofPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
 import { TrackOrderPage } from './pages/TrackOrderPage';
 import { RatingPage } from './pages/RatingPage';
+
 import { Toast } from './components/Toast';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
-import { checkSupabaseConnection, supabase } from './services/supabase';
+
+import {
+  checkSupabaseConnection,
+  supabase,
+} from './services/supabase';
+
+import { createOrder } from './services/orders';
+import { getPaymentInfo } from './utils/paymentInfo';
 import { Database } from 'lucide-react';
 import { formatPeso } from './utils/formatPeso';
 
@@ -41,7 +48,6 @@ const RATING_TOKEN = new URLSearchParams(
 const CHECKOUT_PAGES = [
   'customer-info',
   'payment',
-  'payment-confirm',
 ];
 
 const getQuantity = (item) =>
@@ -86,6 +92,7 @@ export default function App() {
           };
         } else {
           productIndexes.set(String(item.id), result.length);
+
           result.push({
             ...item,
             quantity: acceptedQuantity,
@@ -115,6 +122,7 @@ export default function App() {
   const [pendingInfo, setPendingInfo] = useState(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showFullTerms, setShowFullTerms] = useState(false);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
 
   const showToast = (message) => {
     setToastMessage(message);
@@ -138,7 +146,10 @@ export default function App() {
       })
       .catch((error) => {
         console.warn('Supabase connection check failed', error);
-        if (active) setConnStatus({ connected: false });
+
+        if (active) {
+          setConnStatus({ connected: false });
+        }
       });
 
     return () => {
@@ -167,7 +178,7 @@ export default function App() {
       ) * 100
     ) / 100;
 
-  // Add products without exceeding 10 items across the entire cart.
+  // Add products without exceeding the 10-item cart limit.
   const handleAddToCart = (product, quantity = 1) => {
     const requestedQuantity = Number(quantity);
 
@@ -185,19 +196,6 @@ export default function App() {
 
     if (currentCount + requestedQuantity > MAX_ITEMS) {
       showToast(MAX_ITEMS_MESSAGE);
-      return false;
-    }
-
-    const existingItem = cart.find(
-      (item) => String(item.id) === String(product.id)
-    );
-
-    const updatedProductQuantity =
-      getQuantity(existingItem || { quantity: 0 }) +
-      requestedQuantity;
-
-    if (updatedProductQuantity < 1) {
-      showToast('Invalid product or quantity.');
       return false;
     }
 
@@ -241,7 +239,7 @@ export default function App() {
     return true;
   };
 
-  // Update an existing cart item without exceeding the total limit.
+  // Update an existing cart item.
   const handleUpdateQuantity = (productId, newQuantity) => {
     const requestedQuantity = Number(newQuantity);
 
@@ -358,6 +356,7 @@ export default function App() {
     setCurrentPage('payment');
   };
 
+  // Order saved successfully: continue directly to Photo Proof.
   const handleOrderSuccess = (orderData) => {
     if (supabase && orderData?.order_number) {
       supabase.functions
@@ -382,6 +381,62 @@ export default function App() {
 
     setProofUrl('');
     setCurrentPage('proof');
+  };
+
+  // Save the order directly from the single Payment page.
+  const handlePaymentComplete = async () => {
+    if (isSavingOrder) return;
+
+    if (cartCount < 1 || cartCount > MAX_ITEMS) {
+      showToast(MAX_ITEMS_MESSAGE);
+      setCurrentPage('cart');
+      return;
+    }
+
+    const paymentInfo = getPaymentInfo();
+    const isCash = paymentInfo.method === 'cash';
+    const amount = Number(cartTotal) || 0;
+    const cashReceived = Number(paymentInfo.cashReceived) || 0;
+    const change = Math.max(0, cashReceived - amount);
+    const paidRef = sessionStorage.getItem('fleurs_pay_ref');
+
+    if (isCash && (amount <= 0 || cashReceived < amount)) {
+      showToast('Please enter enough cash on the Payment page.');
+      return;
+    }
+
+    if (!isCash && !paidRef) {
+      showToast('Please complete and verify the GCash payment first.');
+      return;
+    }
+
+    setIsSavingOrder(true);
+
+    try {
+      const order = await createOrder({
+        cart,
+        customer: customerInfo,
+        totalAmount: amount,
+        amount_paid: isCash ? cashReceived : amount,
+        change_amount: isCash ? change : 0,
+        payment_method: isCash ? 'cash' : 'gcash',
+        payment_reference: isCash ? null : paidRef,
+      });
+
+      if (!order) {
+        throw new Error('Unable to save the order. Please try again.');
+      }
+
+      handleOrderSuccess(order);
+    } catch (error) {
+      console.error('Order save failed:', error);
+
+      showToast(
+        error?.message || 'Unable to save the order. Please try again.'
+      );
+    } finally {
+      setIsSavingOrder(false);
+    }
   };
 
   const handleNewOrder = () => {
@@ -517,42 +572,26 @@ export default function App() {
         />
       )}
 
+      {/* ONE PAYMENT PAGE ONLY */}
       {currentPage === 'payment' && (
         <PaymentPage
           cart={cart}
           totalAmount={cartTotal}
           onBack={() => setCurrentPage('customer-info')}
-          onPaid={() => {
-            if (cartCount < 1 || cartCount > MAX_ITEMS) {
-              showToast(MAX_ITEMS_MESSAGE);
-              setCurrentPage('cart');
-              return;
-            }
+          onPaid={handlePaymentComplete}
+        />
+      )}
 
-            setCurrentPage('payment-confirm');
+      {/* Payment succeeds and order is saved before this page opens. */}
+      {currentPage === 'proof' && (
+        <PhotoProofPage
+          order={confirmedOrder}
+          onDone={(url) => {
+            setProofUrl(url || '');
+            setCurrentPage('confirmation');
           }}
         />
       )}
-
-      {currentPage === 'payment-confirm' && (
-        <PaymentConfirmationPage
-          cart={cart}
-          customer={customerInfo}
-          totalAmount={cartTotal}
-          onBack={() => setCurrentPage('payment')}
-          onOrderSuccess={handleOrderSuccess}
-        />
-      )}
-
-{currentPage === 'proof' && (
-  <PhotoProofPage
-    order={confirmedOrder}
-    onDone={(url) => {
-      setProofUrl(url || '');
-      setCurrentPage('confirmation');
-    }}
-  />
-)}
 
       {currentPage === 'confirmation' && (
         <OrderConfirmationPage
@@ -573,6 +612,7 @@ export default function App() {
         />
       )}
 
+      {/* Customer information and Terms & Conditions modal */}
       {currentPage === 'customer-info' && pendingInfo && (
         <div
           className="modal-overlay"
@@ -711,6 +751,7 @@ export default function App() {
                       <span>
                         {item.name} × {item.quantity}
                       </span>
+
                       <span>
                         {formatPeso(
                           (Number(item.price) || 0) * getQuantity(item)
@@ -795,6 +836,7 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   />
+
                   <span>
                     I have read and agree to the Terms &amp; Conditions.
                     <span style={{ color: '#dc2626' }}> *</span>
