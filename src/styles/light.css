@@ -8,6 +8,7 @@
   --fl-wine: #3f1424;
   --fl-muted: #7a5a66;
   --fl-line: #f1d5dc;
+
   color: var(--fl-wine);
 }
 
@@ -18,7 +19,11 @@
   flex-direction: column;
   min-height: 100vh;
   width: 100%;
-  background: linear-gradient(180deg, var(--fl-blush) 0%, var(--fl-white) 38%);
+  background: linear-gradient(
+    180deg,
+    var(--fl-blush) 0%,
+    var(--fl-white) 38%
+  );
 }
 
 .fl-light .fl-page__main {
@@ -72,9 +77,21 @@
 }
 
 /* Round +/- buttons */
-.fl-light .fl-round {
+.fl-light .fl-item__qty {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.fl-light button.fl-round {
+  position: relative;
+  z-index: 6;
   width: 44px;
   height: 44px;
+  padding: 0;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -84,6 +101,14 @@
   background: #fff;
   color: var(--fl-rose-dark);
   cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fl-light .fl-round svg {
+  pointer-events: none;
 }
 
 .fl-light .fl-round--lg {
@@ -100,8 +125,15 @@
   background: var(--fl-blush);
 }
 
+.fl-light .fl-round:focus-visible {
+  outline: 3px solid var(--fl-wine);
+  outline-offset: 3px;
+}
+
 /* Quantity selector */
 .fl-light .fl-qty {
+  position: relative;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 18px;
@@ -109,6 +141,7 @@
   background: #fff;
   border: 1px solid var(--fl-line);
   border-radius: 999px;
+  pointer-events: auto;
 }
 
 .fl-light .fl-qty__value {
@@ -133,6 +166,7 @@
 }
 
 .fl-light .fl-item {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -177,10 +211,14 @@
   font-weight: 600;
 }
 
+/* Keep quantity controls above surrounding cart content */
 .fl-light .fl-item__qty {
+  position: relative;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 10px;
+  pointer-events: auto;
 }
 
 .fl-light .fl-item__count {
@@ -214,13 +252,18 @@
 }
 
 .fl-light .fl-item__remove {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 10px;
   border: 0;
   border-radius: 50%;
   background: none;
   color: #b42318;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .fl-light .fl-total {
@@ -251,7 +294,10 @@
 
 .fl-light .fl-total__actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, 220px), 1fr)
+  );
   gap: 12px;
 }
 
@@ -456,11 +502,25 @@
   border-radius: 12px;
 }
 
+/* Responsive cart layout */
 @media (max-width: 520px) {
+  .fl-light .fl-item {
+    gap: 12px;
+  }
+
   .fl-light .fl-item__sub {
     align-items: center;
     text-align: center;
     margin-left: 0;
+  }
+
+  .fl-light .fl-item__qty {
+    gap: 8px;
+  }
+
+  .fl-light button.fl-round {
+    width: 42px;
+    height: 42px;
   }
 }
 

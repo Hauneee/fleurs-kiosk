@@ -1,4 +1,4 @@
-// src/components/CartItem.jsx
+
 import React from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 
@@ -20,16 +20,38 @@ export const CartItem = ({
       maximumFractionDigits: 2
     })}`;
 
-  const handleDecrease = () => {
-    if (quantity > 1) {
+  const handleDecrease = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (
+      quantity > 1 &&
+      typeof onUpdateQuantity === 'function'
+    ) {
       onUpdateQuantity(item.id, quantity - 1);
     }
   };
 
-  const handleIncrease = () => {
-    if (!canIncrease) return;
+  const handleIncrease = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
 
-    onUpdateQuantity(item.id, quantity + 1);
+    if (!canIncrease || quantity >= MAX_ITEMS) {
+      return;
+    }
+
+    if (typeof onUpdateQuantity === 'function') {
+      onUpdateQuantity(item.id, quantity + 1);
+    }
+  };
+
+  const handleRemove = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (typeof onRemove === 'function') {
+      onRemove(item.id);
+    }
   };
 
   return (
@@ -59,6 +81,11 @@ export const CartItem = ({
           onClick={handleDecrease}
           disabled={quantity <= 1}
           aria-label={`Decrease quantity of ${item.name}`}
+          title={
+            quantity <= 1
+              ? 'Minimum quantity is 1'
+              : 'Decrease quantity'
+          }
         >
           <Minus size={20} strokeWidth={3} />
         </button>
@@ -75,7 +102,6 @@ export const CartItem = ({
           type="button"
           className="fl-round"
           onClick={handleIncrease}
-          disabled={!canIncrease}
           aria-label={`Increase quantity of ${item.name}`}
           title={
             !canIncrease
@@ -100,7 +126,7 @@ export const CartItem = ({
       <button
         type="button"
         className="fl-item__remove"
-        onClick={() => onRemove(item.id)}
+        onClick={handleRemove}
         title="Remove item"
         aria-label={`Remove ${item.name} from cart`}
       >

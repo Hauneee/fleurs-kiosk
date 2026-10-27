@@ -30,7 +30,7 @@ const EMPTY_CUSTOMER = {
   name: '',
   email: '',
   phone: '',
-  section: ''
+  section: '',
 };
 
 const RATING_TOKEN = new URLSearchParams(
@@ -40,15 +40,14 @@ const RATING_TOKEN = new URLSearchParams(
 const CHECKOUT_PAGES = [
   'customer-info',
   'payment',
-  'payment-confirm'
+  'payment-confirm',
 ];
 
+const getQuantity = (item) =>
+  Math.max(0, Number(item.quantity) || 0);
+
 const getTotalItemCount = (items) =>
-  items.reduce(
-    (sum, item) =>
-      sum + Math.max(0, Number(item.quantity) || 0),
-    0
-  );
+  items.reduce((sum, item) => sum + getQuantity(item), 0);
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -58,7 +57,33 @@ export default function App() {
       const saved = sessionStorage.getItem(CART_STORAGE_KEY);
       const parsed = saved ? JSON.parse(saved) : [];
 
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+
+      // Sanitize saved cart and enforce the 10-item limit.
+      let remaining = MAX_ITEMS;
+
+      return parsed.reduce((result, item) => {
+        if (!item || item.id == null || remaining <= 0) {
+          return result;
+        }
+
+        const quantity = Number(item.quantity);
+
+        if (!Number.isInteger(quantity) || quantity < 1) {
+          return result;
+        }
+
+        const acceptedQuantity = Math.min(quantity, remaining);
+
+        result.push({
+          ...item,
+          quantity: acceptedQuantity,
+        });
+
+        remaining -= acceptedQuantity;
+
+        return result;
+      }, []);
     } catch {
       return [];
     }
@@ -90,14 +115,39 @@ export default function App() {
         CART_STORAGE_KEY,
         JSON.stringify(cart)
       );
-    } catch (e) {
-      console.warn('Could not persist session cart', e);
+    } catch (error) {
+      console.warn('Could not persist session cart', error);
     }
   }, [cart]);
 
   useEffect(() => {
-    checkSupabaseConnection().then(setConnStatus);
+    let active = true;
+
+    checkSupabaseConnection()
+      .then((status) => {
+        if (active) setConnStatus(status);
+      })
+      .catch((error) => {
+        console.warn('Supabase connection check failed', error);
+
+        if (active) {
+          setConnStatus({ connected: false });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (
+      cart.length === 0 &&
+      CHECKOUT_PAGES.includes(currentPage)
+    ) {
+      setCurrentPage('cart');
+    }
+  }, [cart, currentPage]);
 
   const cartCount = getTotalItemCount(cart);
 
@@ -106,18 +156,18 @@ export default function App() {
       cart.reduce(
         (sum, item) =>
           sum +
-          (Number(item.price) || 0) *
-            (Number(item.quantity) || 0),
+          (Number(item.price) || 0) * getQuantity(item),
         0
       ) * 100
     ) / 100;
 
-  // Add products without exceeding 10 total items.
+  // Add an item while respecting the total cart limit.
   const handleAddToCart = (product, quantity = 1) => {
     const requestedQuantity = Number(quantity);
 
     if (
-      !product?.id ||
+      !product ||
+      product.id == null ||
       !Number.isInteger(requestedQuantity) ||
       requestedQuantity < 1
     ) {
@@ -125,33 +175,36 @@ export default function App() {
       return;
     }
 
+    // Immediate check for the current rendered cart.
     if (cartCount + requestedQuantity > MAX_ITEMS) {
-      showToast(
-        `Maximum of ${MAX_ITEMS} items per order only.`
-      );
+      showToast(`Maximum of ${MAX_ITEMS} items per order only.`);
       return;
     }
 
-    const existingIndex = cart.findIndex(
-      (item) => item.id === product.id
-    );
+    setCart((previousCart) => {
+      const currentCount = getTotalItemCount(previousCart);
 
-    let updatedCart;
-
-    if (existingIndex !== -1) {
-      updatedCart = cart.map((item, index) =>
-        index === existingIndex
-          ? {
-              ...item,
-              quantity:
-                (Number(item.quantity) || 0) +
-                requestedQuantity
-            }
-          : item
+      const existingIndex = previousCart.findIndex(
+        (item) => String(item.id) === String(product.id)
       );
-    } else {
-      updatedCart = [
-        ...cart,
+
+      if (currentCount + requestedQuantity > MAX_ITEMS) {
+        return previousCart;
+      }
+
+      if (existingIndex !== -1) {
+        return previousCart.map((item, index) =>
+          index === existingIndex
+            ? {
+                ...item,
+                quantity: getQuantity(item) + requestedQuantity,
+              }
+            : item
+        );
+      }
+
+      return [
+        ...previousCart,
         {
           id: product.id,
           product_id: product.id,
@@ -159,66 +212,71 @@ export default function App() {
           category: product.category,
           price: product.price,
           quantity: requestedQuantity,
-          image_url: product.image_url
-        }
+          image_url: product.image_url,
+        },
       ];
-    }
+    });
 
-    setCart(updatedCart);
     showToast(`${product.name} added to cart!`);
   };
 
-  // Update quantity without exceeding the total cart limit.
+  // Update quantity using the latest cart state.
   const handleUpdateQuantity = (productId, newQuantity) => {
     const requestedQuantity = Number(newQuantity);
 
-    if (!Number.isInteger(requestedQuantity)) {
-      showToast('Invalid quantity.');
+    if (
+      !Number.isInteger(requestedQuantity) ||
+      requestedQuantity < 1
+    ) {
       return;
     }
 
-    if (requestedQuantity < 1) {
-      handleRemoveItem(productId);
-      return;
-    }
+    setCart((previousCart) => {
+      const targetIndex = previousCart.findIndex(
+        (item) => String(item.id) === String(productId)
+      );
 
-    const targetItem = cart.find(
-      (item) => item.id === productId
-    );
+      if (targetIndex === -1) {
+        return previousCart;
+      }
 
-    if (!targetItem) return;
-
-    const otherItemsCount = cart
-      .filter((item) => item.id !== productId)
-      .reduce(
-        (sum, item) =>
-          sum + Math.max(0, Number(item.quantity) || 0),
+      const otherItemsCount = previousCart.reduce(
+        (sum, item, index) => {
+          if (index === targetIndex) return sum;
+          return sum + getQuantity(item);
+        },
         0
       );
 
-    if (otherItemsCount + requestedQuantity > MAX_ITEMS) {
-      showToast(
-        `Maximum of ${MAX_ITEMS} items per order only.`
-      );
-      return;
-    }
+      // Do not allow more than 10 items across all products.
+      if (otherItemsCount + requestedQuantity > MAX_ITEMS) {
+        return previousCart;
+      }
 
-    setCart(
-      cart.map((item) =>
-        item.id === productId
+      const currentQuantity = getQuantity(
+        previousCart[targetIndex]
+      );
+
+      if (currentQuantity === requestedQuantity) {
+        return previousCart;
+      }
+
+      return previousCart.map((item, index) =>
+        index === targetIndex
           ? { ...item, quantity: requestedQuantity }
           : item
+      );
+    });
+  };
+
+  const handleRemoveItem = (productId) => {
+    setCart((previousCart) =>
+      previousCart.filter(
+        (item) => String(item.id) !== String(productId)
       )
     );
   };
 
-  const handleRemoveItem = (productId) => {
-    setCart((prevCart) =>
-      prevCart.filter((item) => item.id !== productId)
-    );
-  };
-
-  // Validate the cart before entering checkout.
   const handleProceedToCheckout = () => {
     if (cartCount === 0) {
       showToast('Please add an item to your cart.');
@@ -237,7 +295,7 @@ export default function App() {
   };
 
   const handleCustomerInfoSubmit = (info) => {
-    if (cartCount === 0 || cartCount > MAX_ITEMS) {
+    if (cartCount < 1 || cartCount > MAX_ITEMS) {
       showToast(
         `Your order must contain between 1 and ${MAX_ITEMS} items.`
       );
@@ -247,7 +305,7 @@ export default function App() {
 
     setPendingInfo({
       ...info,
-      section: info.section || 'N/A'
+      section: info.section || 'N/A',
     });
 
     setAcceptedTerms(false);
@@ -257,7 +315,7 @@ export default function App() {
   const handleConfirmOrder = () => {
     if (!pendingInfo || !acceptedTerms) return;
 
-    if (cartCount === 0 || cartCount > MAX_ITEMS) {
+    if (cartCount < 1 || cartCount > MAX_ITEMS) {
       setPendingInfo(null);
       setAcceptedTerms(false);
       setCurrentPage('cart');
@@ -280,10 +338,12 @@ export default function App() {
         .invoke('super-api', {
           body: {
             order_number: orderData.order_number,
-            site_url: window.location.origin
-          }
+            site_url: window.location.origin,
+          },
         })
-        .catch((e) => console.warn('Rating email failed', e));
+        .catch((error) =>
+          console.warn('Rating email failed', error)
+        );
     }
 
     setConfirmedOrder(orderData);
@@ -326,10 +386,11 @@ export default function App() {
             zIndex: 100,
             display: 'flex',
             gap: '8px',
-            alignItems: 'center'
+            alignItems: 'center',
           }}
         >
           <button
+            type="button"
             onClick={() => setIsConfigModalOpen(true)}
             style={{
               background: 'rgba(11, 21, 40, 0.85)',
@@ -346,7 +407,7 @@ export default function App() {
               alignItems: 'center',
               gap: '6px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             }}
             title="Configure Supabase Database"
           >
@@ -432,7 +493,7 @@ export default function App() {
           totalAmount={cartTotal}
           onBack={() => setCurrentPage('customer-info')}
           onPaid={() => {
-            if (cartCount === 0 || cartCount > MAX_ITEMS) {
+            if (cartCount < 1 || cartCount > MAX_ITEMS) {
               showToast(
                 `Your order must contain between 1 and ${MAX_ITEMS} items.`
               );
@@ -500,7 +561,7 @@ export default function App() {
               textAlign: 'center',
               maxHeight: '90vh',
               overflowY: 'auto',
-              width: 'min(680px, 95vw)'
+              width: 'min(680px, 95vw)',
             }}
           >
             {showFullTerms ? (
@@ -512,17 +573,17 @@ export default function App() {
                     fontSize: '1.8rem',
                     fontWeight: 800,
                     marginBottom: '16px',
-                    color: '#7d193e'
+                    color: '#7d193e',
                   }}
                 >
-                  TERMS & CONDITIONS
+                  TERMS &amp; CONDITIONS
                 </h2>
 
                 <div
                   style={{
                     textAlign: 'left',
                     lineHeight: 1.7,
-                    marginBottom: '20px'
+                    marginBottom: '20px',
                   }}
                 >
                   <h3>1. Order Confirmation</h3>
@@ -561,7 +622,7 @@ export default function App() {
                   <h3>6. Agreement</h3>
                   <p>
                     By checking the acceptance box, you confirm that you
-                    have read and agree to these Terms & Conditions.
+                    have read and agree to these Terms &amp; Conditions.
                   </p>
                 </div>
 
@@ -582,7 +643,7 @@ export default function App() {
                     fontSize: '1.8rem',
                     fontWeight: 800,
                     marginBottom: '8px',
-                    color: '#7d193e'
+                    color: '#7d193e',
                   }}
                 >
                   CONFIRM YOUR ORDER
@@ -593,7 +654,7 @@ export default function App() {
                     fontSize: '1.05rem',
                     fontWeight: 700,
                     color: '#7a5261',
-                    marginBottom: '16px'
+                    marginBottom: '16px',
                   }}
                 >
                   Review your order before proceeding to payment.
@@ -606,7 +667,7 @@ export default function App() {
                     borderRadius: '16px',
                     padding: '12px 16px',
                     textAlign: 'left',
-                    marginBottom: '14px'
+                    marginBottom: '14px',
                   }}
                 >
                   {cart.map((item) => (
@@ -618,7 +679,7 @@ export default function App() {
                         gap: '12px',
                         padding: '6px 0',
                         fontWeight: 700,
-                        color: '#3f1424'
+                        color: '#3f1424',
                       }}
                     >
                       <span>
@@ -627,7 +688,8 @@ export default function App() {
 
                       <span>
                         {formatPeso(
-                          Number(item.price) * item.quantity
+                          (Number(item.price) || 0) *
+                            getQuantity(item)
                         )}
                       </span>
                     </div>
@@ -642,7 +704,7 @@ export default function App() {
                       paddingTop: '10px',
                       fontSize: '1.3rem',
                       fontWeight: 800,
-                      color: '#7d193e'
+                      color: '#7d193e',
                     }}
                   >
                     <span>TOTAL</span>
@@ -657,7 +719,7 @@ export default function App() {
                     color: '#654552',
                     marginBottom: '18px',
                     textAlign: 'left',
-                    overflowWrap: 'anywhere'
+                    overflowWrap: 'anywhere',
                   }}
                 >
                   <div>Name: {pendingInfo.name}</div>
@@ -676,10 +738,10 @@ export default function App() {
                     fontWeight: 800,
                     cursor: 'pointer',
                     fontSize: '1rem',
-                    marginBottom: '16px'
+                    marginBottom: '16px',
                   }}
                 >
-                  READ FULL TERMS & CONDITIONS
+                  READ FULL TERMS &amp; CONDITIONS
                 </button>
 
                 <label
@@ -691,14 +753,14 @@ export default function App() {
                     lineHeight: 1.5,
                     marginBottom: '20px',
                     cursor: 'pointer',
-                    color: '#3f1424'
+                    color: '#3f1424',
                   }}
                 >
                   <input
                     type="checkbox"
                     checked={acceptedTerms}
-                    onChange={(e) =>
-                      setAcceptedTerms(e.target.checked)
+                    onChange={(event) =>
+                      setAcceptedTerms(event.target.checked)
                     }
                     style={{
                       width: '20px',
@@ -706,12 +768,12 @@ export default function App() {
                       flexShrink: 0,
                       marginTop: '2px',
                       accentColor: '#c2255c',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
                     }}
                   />
 
                   <span>
-                    I have read and agree to the Terms & Conditions.
+                    I have read and agree to the Terms &amp; Conditions.
                     <span style={{ color: '#dc2626' }}> *</span>
                   </span>
                 </label>
@@ -721,7 +783,7 @@ export default function App() {
                     display: 'flex',
                     gap: '12px',
                     flexWrap: 'wrap',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
                   }}
                 >
                   <button
@@ -733,10 +795,10 @@ export default function App() {
                       opacity: acceptedTerms ? 1 : 0.5,
                       cursor: acceptedTerms
                         ? 'pointer'
-                        : 'not-allowed'
+                        : 'not-allowed',
                     }}
                   >
-                    CONFIRM & CONTINUE
+                    CONFIRM &amp; CONTINUE
                   </button>
 
                   <button
