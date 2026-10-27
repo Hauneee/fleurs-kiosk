@@ -3177,10 +3177,12 @@
     $("loginMessage").textContent =
       "Supabase library did not load. Check the Supabase script in admin.html.";
   } else {
-    sb = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
+   sb = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+
+window.adminSupabase = sb;
 
     sb.auth.getSession().then(async ({ data, error }) => {
       if (error) {
