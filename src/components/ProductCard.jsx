@@ -1,17 +1,14 @@
-
 import React from 'react';
 import { BowSvg } from './Decorations';
 import { getStockInfo } from '../utils/stock';
 
 export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
   const stockInfo = getStockInfo(product);
-  const { soldOut, low, qty, label } = stockInfo;
+  const { soldOut, low, qty } = stockInfo;
 
   const handleSelect = () => {
     if (soldOut || (qty !== null && qty <= 0)) return;
-    if (typeof onSelect === 'function') {
-      onSelect(product);
-    }
+    onSelect?.(product);
   };
 
   const handleKeyDown = (event) => {
@@ -30,8 +27,8 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
     qty === null
       ? ''
       : soldOut
-        ? 'Out of stock'
-        : `Only ${qty} left`;
+        ? 'OUT OF STOCK'
+        : `ONLY ${qty} LEFT`;
 
   return (
     <div
@@ -47,10 +44,8 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
       style={{
         position: 'relative',
         cursor: soldOut ? 'not-allowed' : 'pointer',
-        opacity: soldOut ? 0.58 : 1,
+        opacity: soldOut ? 0.65 : 1,
         filter: soldOut ? 'grayscale(35%)' : 'none',
-        pointerEvents: soldOut ? 'none' : 'auto',
-        transition: 'opacity 0.2s ease',
       }}
     >
       {/* Decorative Bow */}
@@ -68,44 +63,54 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
         <BowSvg style={{ width: '42px', height: '26px' }} />
       </div>
 
-      {/* Price */}
+      {/* Price Badge */}
       <div className="price-badge">
         ₱{Number(product.price).toLocaleString()}
       </div>
 
-      {/* Stock notification */}
+      {/* Stock Notification - Above Product Image */}
       {qty !== null && (
         <div
           role="status"
           style={{
             position: 'absolute',
             top: '48px',
-            right: '8px',
-            left: '8px',
-            zIndex: 5,
-            padding: '7px 9px',
-            borderRadius: '10px',
+            left: '12px',
+            right: '12px',
+            zIndex: 6,
+            boxSizing: 'border-box',
+            padding: '9px 12px',
+            borderRadius: '12px',
             background: soldOut
               ? '#991b1b'
               : low
-                ? '#fef3c7'
+                ? '#fff0c2'
                 : '#dcfce7',
             color: soldOut
               ? '#ffffff'
               : low
                 ? '#92400e'
                 : '#166534',
-            fontSize: '0.78rem',
-            fontWeight: 800,
+            border: `1px solid ${
+              soldOut
+                ? '#991b1b'
+                : low
+                  ? '#f59e0b'
+                  : '#86efac'
+            }`,
+            fontSize: '0.8rem',
+            fontWeight: 900,
             textAlign: 'center',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+            letterSpacing: '0.04em',
+            boxShadow: '0 3px 8px rgba(0,0,0,0.10)',
+            pointerEvents: 'none',
           }}
         >
-          {soldOut ? 'OUT OF STOCK' : stockLabel}
+          {soldOut ? '✕ OUT OF STOCK' : `⚠ ${stockLabel}`}
         </div>
       )}
 
-      {/* Product image */}
+      {/* Product Image */}
       <div className="image-frame">
         {product.image_url ? (
           <img
@@ -125,22 +130,26 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
               color: '#9ca3af',
             }}
           >
-            No image
+            No image available
           </div>
         )}
       </div>
 
-      {/* Product name */}
+      {/* Product Name */}
       <h3 className="product-title">{product.name}</h3>
 
-      {/* Stock details */}
+      {/* Stock Details */}
       {qty !== null && (
         <p
           style={{
             margin: '6px 0 0',
             fontSize: '0.85rem',
             fontWeight: 700,
-            color: soldOut ? '#991b1b' : low ? '#92400e' : '#166534',
+            color: soldOut
+              ? '#991b1b'
+              : low
+                ? '#92400e'
+                : '#166534',
           }}
         >
           {soldOut
@@ -149,7 +158,7 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
         </p>
       )}
 
-      {/* Action prompt */}
+      {/* Selection Prompt */}
       <div
         style={{
           fontSize: '0.8rem',
