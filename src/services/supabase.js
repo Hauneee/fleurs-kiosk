@@ -1,10 +1,11 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { INITIAL_PRODUCTS } from '../data/defaultProducts';
 import { getPaymentInfo } from '../utils/paymentInfo';
 
-// ===============================
+// ========================================
 // SUPABASE CONFIGURATION
-// ===============================
+// ========================================
 
 const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const envAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -15,9 +16,9 @@ const savedKey = localStorage.getItem('fleurs_supabase_anon_key');
 const supabaseUrl = (savedUrl || envUrl).trim();
 const supabaseAnonKey = (savedKey || envAnonKey).trim();
 
-console.log('[FLEURS DEBUG] Supabase URL:', supabaseUrl);
-console.log('[FLEURS DEBUG] Using saved URL:', Boolean(savedUrl));
-console.log('[FLEURS DEBUG] Using saved key:', Boolean(savedKey));
+console.log('[FLEURS] Supabase configured:', Boolean(supabaseUrl && supabaseAnonKey));
+console.log('[FLEURS] Using saved URL:', Boolean(savedUrl));
+console.log('[FLEURS] Using saved key:', Boolean(savedKey));
 
 export const isSupabaseConfigured = () =>
   Boolean(
@@ -35,16 +36,16 @@ const CACHE_PRODUCTS_KEY = 'fleurs_cached_products';
 const CACHE_ORDERS_KEY = 'fleurs_cached_orders';
 const ORDER_REQUEST_TIMEOUT_MS = 30000;
 
-// ===============================
+// ========================================
 // LOCAL PRODUCTS
-// ===============================
+// ========================================
 
 export const getLocalProducts = () => {
   try {
     const raw = localStorage.getItem(CACHE_PRODUCTS_KEY);
     if (raw) return JSON.parse(raw);
   } catch (err) {
-    console.error('Failed to parse cached products:', err);
+    console.error('[FLEURS] Failed to parse cached products:', err);
   }
 
   localStorage.setItem(
@@ -62,16 +63,16 @@ export const saveLocalProducts = (products) => {
   );
 };
 
-// ===============================
+// ========================================
 // LOCAL ORDERS
-// ===============================
+// ========================================
 
 export const getLocalOrders = () => {
   try {
     const raw = localStorage.getItem(CACHE_ORDERS_KEY);
     if (raw) return JSON.parse(raw);
   } catch (err) {
-    console.error('Failed to parse cached orders:', err);
+    console.error('[FLEURS] Failed to parse cached orders:', err);
   }
 
   return [];
@@ -84,23 +85,22 @@ export const saveLocalOrders = (orders) => {
   );
 };
 
-// ===============================
+// ========================================
 // SUPABASE CONNECTION
-// ===============================
+// ========================================
 
 export const checkSupabaseConnection = async () => {
   if (!isSupabaseConfigured() || !supabase) {
     return {
       connected: false,
-      message:
-        'Supabase credentials are not configured. Running offline/demo mode.',
+      message: 'Supabase credentials are not configured. Running offline/demo mode.',
     };
   }
 
   try {
     const { error } = await supabase
       .from('products')
-      .select('count', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true });
 
     if (error) {
       return {
@@ -121,73 +121,87 @@ export const checkSupabaseConnection = async () => {
   }
 };
 
-// ===============================
+// ========================================
 // FETCH PRODUCTS
-// ===============================
+// ========================================
 
 export const fetchProducts = async (category = null) => {
-  if (isSupabaseConfigured() && supabase) {
-    try {
-      let query = supabase
-        .from('products')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: true });
+  if (!isSupabaseConfigured() || !supabase) {
+    console.error(
+      '[FLEURS STOCK] Supabase is not configured. Using local products.'
+    );
 
-      if (category) {
-        query = query.eq('category', category);
-      }
+    const local = getLocalProducts().filter(
+      (product) => product.is_active
+    );
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      if (data && data.length === 0 && !category) {
-        await seedDefaultProducts();
-        return getLocalProducts();
-      }
-
-      return data || [];
-    } catch (err) {
-      console.warn('Supabase products fetch failed:', err.message);
-    }
+    return category
+      ? local.filter((product) => product.category === category)
+      : local;
   }
 
-  const local = getLocalProducts().filter(
-    (product) => product.is_active
+  let query = supabase
+    .from('products')
+    .select(
+      'id, name, category, description, price, image_url, stock, is_active, created_at'
+    )
+    .eq('is_active', true)
+    .order('created_at', { ascending: true });
+
+  if (category) {
+    query = query.eq('category', category);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[FLEURS STOCK] Supabase fetch failed:', error);
+    throw new Error(
+      `Unable to fetch products from Supabase: ${error.message}`
+    );
+  }
+
+  const products = data || [];
+
+  console.table(
+    products.map((product) => ({
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      stock: product.stock,
+      is_active: product.is_active,
+    }))
   );
 
-  return category
-    ? local.filter((product) => product.category === category)
-    : local;
+  // Return the database rows directly so stock values are preserved.
+  return products;
 };
 
-// ===============================
+// ========================================
 // FETCH ALL ADMIN PRODUCTS
-// ===============================
+// ========================================
 
 export const fetchAllAdminProducts = async () => {
   if (isSupabaseConfigured() && supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
-
-      return data || [];
-    } catch (err) {
-      console.warn('Using local product cache:', err.message);
+    if (error) {
+      console.error('[FLEURS] Failed to fetch admin products:', error);
+      throw new Error(`Unable to fetch admin products: ${error.message}`);
     }
+
+    return data || [];
   }
 
   return getLocalProducts();
 };
 
-// ===============================
+// ========================================
 // CREATE PRODUCT
-// ===============================
+// ========================================
 
 export const createProduct = async (productData) => {
   const newProduct = {
@@ -220,9 +234,9 @@ export const createProduct = async (productData) => {
   return created;
 };
 
-// ===============================
+// ========================================
 // UPDATE PRODUCT
-// ===============================
+// ========================================
 
 export const updateProduct = async (id, updates) => {
   if (isSupabaseConfigured() && supabase) {
@@ -239,9 +253,7 @@ export const updateProduct = async (id, updates) => {
   }
 
   const products = getLocalProducts();
-  const index = products.findIndex(
-    (product) => product.id === id
-  );
+  const index = products.findIndex((product) => product.id === id);
 
   if (index !== -1) {
     products[index] = {
@@ -256,9 +268,9 @@ export const updateProduct = async (id, updates) => {
   throw new Error('Product not found in local storage');
 };
 
-// ===============================
+// ========================================
 // DELETE PRODUCT
-// ===============================
+// ========================================
 
 export const deleteProduct = async (id) => {
   if (isSupabaseConfigured() && supabase) {
@@ -273,17 +285,15 @@ export const deleteProduct = async (id) => {
   }
 
   saveLocalProducts(
-    getLocalProducts().filter(
-      (product) => product.id !== id
-    )
+    getLocalProducts().filter((product) => product.id !== id)
   );
 
   return true;
 };
 
-// ===============================
+// ========================================
 // SEED DEFAULT PRODUCTS
-// ===============================
+// ========================================
 
 export const seedDefaultProducts = async () => {
   if (!isSupabaseConfigured() || !supabase) {
@@ -293,22 +303,20 @@ export const seedDefaultProducts = async () => {
   try {
     const { error } = await supabase
       .from('products')
-      .upsert(INITIAL_PRODUCTS, {
-        onConflict: 'id',
-      });
+      .upsert(INITIAL_PRODUCTS, { onConflict: 'id' });
 
     if (error) throw error;
 
     return true;
   } catch (err) {
-    console.error('Error seeding products:', err);
+    console.error('[FLEURS] Error seeding products:', err);
     return false;
   }
 };
 
-// ===============================
+// ========================================
 // CREATE ORDER
-// ===============================
+// ========================================
 
 export const createOrder = async (orderPayload, items) => {
   const customer = orderPayload?.customer || {};
@@ -327,14 +335,10 @@ export const createOrder = async (orderPayload, items) => {
 
   const paymentMethod = String(
     paymentInfo?.method || orderPayload?.payment_method || ''
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 
   if (!['cash', 'gcash'].includes(paymentMethod)) {
-    throw new Error(
-      'Please select Cash or GCash as the payment method.'
-    );
+    throw new Error('Please select Cash or GCash as the payment method.');
   }
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -345,6 +349,7 @@ export const createOrder = async (orderPayload, items) => {
   const amountPaid =
     Number(orderPayload?.amount_paid) ||
     (paymentMethod === 'gcash' ? totalAmount : 0);
+
   const changeAmount =
     Number(orderPayload?.change_amount) ||
     Math.max(0, amountPaid - totalAmount);
@@ -367,10 +372,7 @@ export const createOrder = async (orderPayload, items) => {
     };
   });
 
-  // ===============================
-  // ONLINE: SUPABASE RPC
-  // ===============================
-
+  // Online checkout via Supabase RPC.
   if (isSupabaseConfigured() && supabase) {
     const idempotencyKey = orderPayload?.idempotency_key;
 
@@ -385,9 +387,7 @@ export const createOrder = async (orderPayload, items) => {
       );
     }
 
-    const paymentReference =
-      orderPayload?.payment_reference || null;
-
+    const paymentReference = orderPayload?.payment_reference || null;
     const controller = new AbortController();
     let timeoutId;
     let requestTimedOut = false;
@@ -411,11 +411,9 @@ export const createOrder = async (orderPayload, items) => {
         .abortSignal(controller.signal);
 
       if (error) {
-        console.error('[FLEURS DEBUG] Supabase RPC error:', error);
+        console.error('[FLEURS] Supabase RPC error:', error);
         throw new Error(error.message);
       }
-
-      console.log('[FLEURS DEBUG] Raw RPC response:', data);
 
       const result = Array.isArray(data) ? data[0] : data;
 
@@ -425,7 +423,7 @@ export const createOrder = async (orderPayload, items) => {
         !result.order_number
       ) {
         throw new Error(
-          'The server response did not contain an order number. Check the return value of create_kiosk_order.'
+          'The server response did not contain an order number. Check create_kiosk_order.'
         );
       }
 
@@ -439,7 +437,7 @@ export const createOrder = async (orderPayload, items) => {
         status: result.status || 'pending',
         payment_status:
           result.payment_status ||
-          (paymentMethod === 'cash' ? 'pending' : 'paid'),
+          (paymentMethod === 'cash' ? 'pending' : 'pending'),
       };
     } catch (err) {
       if (requestTimedOut) {
@@ -448,64 +446,48 @@ export const createOrder = async (orderPayload, items) => {
         );
       }
 
-      console.error('[FLEURS DEBUG] Order creation failed:', err);
+      console.error('[FLEURS] Order creation failed:', err);
 
-      // Friendly message when the database rejects the order because
-      // an item sold out (or was deactivated) before checkout finished.
       if (/insufficient stock|inactive product/i.test(err?.message || '')) {
         const stockError = new Error(
-          'Sorry, one or more items in your cart just ran out of stock. ' +
-          'Please go back to your cart, check the quantities, and try again.'
+          'Sorry, one or more items in your cart just ran out of stock. Please check your cart quantities and try again.'
         );
         stockError.code = 'OUT_OF_STOCK';
         throw stockError;
       }
 
       throw new Error(
-        `Unable to create order: ${
-          err?.message || 'Please try again.'
-        }`
+        `Unable to create order: ${err?.message || 'Please try again.'}`
       );
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
-  // ===============================
-  // OFFLINE / DEMO FALLBACK
-  // ===============================
-
-  const orderNumber =
-    `#${Math.floor(100000 + Math.random() * 900000)}`;
-
+  // Offline/demo fallback.
+  const orderNumber = `#${Math.floor(100000 + Math.random() * 900000)}`;
   const now = new Date().toISOString();
 
   const fallbackOrder = {
     id: `ord-${Date.now()}`,
     order_number: orderNumber,
-
     customer: {
       name: customer.name.trim(),
       email: customer.email.trim(),
       phone: customer.phone.trim(),
     },
-
     customer_name: customer.name.trim(),
     customer_email: customer.email.trim(),
     customer_phone: customer.phone.trim(),
-
     total_amount: totalAmount,
     amount_paid: amountPaid,
     change_amount: changeAmount,
-
     status: 'pending',
-    payment_status:
-      paymentMethod === 'cash' ? 'pending' : 'paid',
+    payment_status: 'pending',
     payment_method: paymentMethod,
     payment_reference: orderPayload?.payment_reference || null,
     idempotency_key: orderPayload?.idempotency_key || null,
     created_at: now,
-
     items: items.map((item) => {
       const quantity = Number(item.quantity) || 1;
       const unitPrice = Number(item.price) || 0;
@@ -514,9 +496,7 @@ export const createOrder = async (orderPayload, items) => {
         item.product_name || item.name || 'Unnamed Product';
 
       return {
-        id: `item-${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 6)}`,
+        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         product_id: item.product_id || item.id,
         product_name: productName,
         name: productName,
@@ -536,32 +516,25 @@ export const createOrder = async (orderPayload, items) => {
   return fallbackOrder;
 };
 
-// ===============================
+// ========================================
 // TRACK ORDER
-// ===============================
+// ========================================
 
 export const trackOrder = async (orderNumber) => {
-  const cleanNumber = String(orderNumber || '')
-    .replace(/\D/g, '');
+  const cleanNumber = String(orderNumber || '').replace(/\D/g, '');
 
   if (!cleanNumber) {
     throw new Error('Please enter your order number.');
   }
 
   if (isSupabaseConfigured() && supabase) {
-    const { data, error } = await supabase.rpc(
-      'track_order',
-      {
-        p_order_number: `#${cleanNumber}`,
-      }
-    );
+    const { data, error } = await supabase.rpc('track_order', {
+      p_order_number: `#${cleanNumber}`,
+    });
 
     if (error) {
-      console.error('Order tracking failed:', error);
-
-      throw new Error(
-        'Unable to check your order right now.'
-      );
+      console.error('[FLEURS] Order tracking failed:', error);
+      throw new Error('Unable to check your order right now.');
     }
 
     return data || null;
@@ -569,8 +542,7 @@ export const trackOrder = async (orderNumber) => {
 
   const match = getLocalOrders().find(
     (order) =>
-      String(order.order_number || '')
-        .replace(/\D/g, '') === cleanNumber
+      String(order.order_number || '').replace(/\D/g, '') === cleanNumber
   );
 
   if (!match) return null;
@@ -583,8 +555,7 @@ export const trackOrder = async (orderNumber) => {
     total_amount: match.total_amount,
     created_at: match.created_at,
     order_items: (match.order_items || match.items || []).map((item) => ({
-      product_name:
-        item.product_name || item.name || 'Unnamed Product',
+      product_name: item.product_name || item.name || 'Unnamed Product',
       quantity: item.quantity,
       subtotal:
         item.subtotal ??
