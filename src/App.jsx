@@ -198,9 +198,11 @@ export default function App() {
   const cartTotal = getItemsTotal(cart);
 
   // These values always describe the order currently being checked out.
-  const activeCheckoutItems = checkoutItems ?? cart;
-  const checkoutItemCount = getTotalItemCount(activeCheckoutItems);
-  const checkoutTotal = getItemsTotal(activeCheckoutItems);
+ const activeCheckoutItems =
+  checkoutItems !== null ? checkoutItems : cart;
+
+const checkoutItemCount = getTotalItemCount(activeCheckoutItems);
+const checkoutTotal = getItemsTotal(activeCheckoutItems);
 
   // Verify inventory for the supplied items.
   // Only synchronize with the saved cart during regular cart checkout.
@@ -445,56 +447,54 @@ export default function App() {
 
   // Checkout Now: prepare a separate order without adding anything to cart.
   const handleCheckoutNow = (product, quantity = 1) => {
-    const requestedQuantity = Number(quantity);
+  const requestedQuantity = Number(quantity);
 
-    if (
-      !product ||
-      product.id == null ||
-      !Number.isInteger(requestedQuantity) ||
-      requestedQuantity < 1
-    ) {
-      showToast('Invalid product or quantity.');
-      return false;
-    }
+  if (
+    !product ||
+    product.id == null ||
+    !Number.isInteger(requestedQuantity) ||
+    requestedQuantity < 1 ||
+    requestedQuantity > MAX_ITEMS
+  ) {
+    showToast('Please select a valid product quantity.');
+    return false;
+  }
 
-    if (requestedQuantity > MAX_ITEMS) {
-      showToast(MAX_ITEMS_MESSAGE);
-      return false;
-    }
+  const stockInfo = getStockInfo(product);
 
-    const stockInfo = getStockInfo(product);
+  if (stockInfo.soldOut) {
+    showToast('Sorry, this product is out of stock.');
+    return false;
+  }
 
-    if (stockInfo.soldOut) {
-      showToast('Sorry, this product is out of stock.');
-      return false;
-    }
+  const availableStock = remainingToAdd(product, 0);
 
-    const availableStock = remainingToAdd(product, 0);
+  if (requestedQuantity > availableStock) {
+    showToast(
+      availableStock <= 0
+        ? 'This product is out of stock.'
+        : `Only ${availableStock} unit(s) are available.`
+    );
+    return false;
+  }
 
-    if (requestedQuantity > availableStock) {
-      showToast(
-        availableStock <= 0
-          ? 'This product is out of stock.'
-          : `Only ${availableStock} unit(s) are available.`
-      );
-      return false;
-    }
-
-    const selectedItem = {
-      ...product,
-      id: product.id,
-      product_id: product.product_id ?? product.id,
-      quantity: requestedQuantity,
-    };
-
-    setCheckoutItems([selectedItem]);
-    setPendingInfo(null);
-    setAcceptedTerms(false);
-    setShowFullTerms(false);
-    setCurrentPage('customer-info');
-
-    return true;
+  const selectedItem = {
+    ...product,
+    id: product.id,
+    product_id: product.product_id ?? product.id,
+    quantity: requestedQuantity,
   };
+
+  // Keep this order separate from the cart.
+  setCheckoutItems([selectedItem]);
+
+  setPendingInfo(null);
+  setAcceptedTerms(false);
+  setShowFullTerms(false);
+  setCurrentPage('customer-info');
+
+  return true;
+};
 
   const handleUpdateQuantity = (productId, newQuantity) => {
     const requestedQuantity = Number(newQuantity);
