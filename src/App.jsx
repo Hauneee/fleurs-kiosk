@@ -23,7 +23,7 @@ import {
 } from './services/supabase';
 
 import { getPaymentInfo } from './utils/paymentInfo';
-import { getStockInfo, remainingToAdd } from './utils/stock';
+import { getStockInfo, remainingToAdd } from './pages/stock';
 import { Database } from 'lucide-react';
 import { formatPeso } from './utils/formatPeso';
 
