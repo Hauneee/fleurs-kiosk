@@ -25,6 +25,7 @@ import './styles/track.css';
 
 const MAX_ITEMS = 10;
 const CART_STORAGE_KEY = 'fleurs_kiosk_cart';
+const MAX_ITEMS_MESSAGE = 'Maximum order is only 10 items!';
 
 const EMPTY_CUSTOMER = {
   name: '',
@@ -59,31 +60,42 @@ export default function App() {
 
       if (!Array.isArray(parsed)) return [];
 
-      // Sanitize saved cart and enforce the 10-item limit.
       let remaining = MAX_ITEMS;
+      const result = [];
+      const productIndexes = new Map();
 
-      return parsed.reduce((result, item) => {
+      parsed.forEach((item) => {
         if (!item || item.id == null || remaining <= 0) {
-          return result;
+          return;
         }
 
         const quantity = Number(item.quantity);
 
         if (!Number.isInteger(quantity) || quantity < 1) {
-          return result;
+          return;
         }
 
         const acceptedQuantity = Math.min(quantity, remaining);
+        const existingIndex = productIndexes.get(String(item.id));
 
-        result.push({
-          ...item,
-          quantity: acceptedQuantity,
-        });
+        if (existingIndex !== undefined) {
+          result[existingIndex] = {
+            ...result[existingIndex],
+            quantity:
+              result[existingIndex].quantity + acceptedQuantity,
+          };
+        } else {
+          productIndexes.set(String(item.id), result.length);
+          result.push({
+            ...item,
+            quantity: acceptedQuantity,
+          });
+        }
 
         remaining -= acceptedQuantity;
+      });
 
-        return result;
-      }, []);
+      return result;
     } catch {
       return [];
     }
@@ -111,10 +123,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(
-        CART_STORAGE_KEY,
-        JSON.stringify(cart)
-      );
+      sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
     } catch (error) {
       console.warn('Could not persist session cart', error);
     }
@@ -129,10 +138,7 @@ export default function App() {
       })
       .catch((error) => {
         console.warn('Supabase connection check failed', error);
-
-        if (active) {
-          setConnStatus({ connected: false });
-        }
+        if (active) setConnStatus({ connected: false });
       });
 
     return () => {
@@ -150,18 +156,18 @@ export default function App() {
   }, [cart, currentPage]);
 
   const cartCount = getTotalItemCount(cart);
+  const remainingSlots = Math.max(0, MAX_ITEMS - cartCount);
 
   const cartTotal =
     Math.round(
       cart.reduce(
         (sum, item) =>
-          sum +
-          (Number(item.price) || 0) * getQuantity(item),
+          sum + (Number(item.price) || 0) * getQuantity(item),
         0
       ) * 100
     ) / 100;
 
-  // Add an item while respecting the total cart limit.
+  // Add products without exceeding 10 items across the entire cart.
   const handleAddToCart = (product, quantity = 1) => {
     const requestedQuantity = Number(quantity);
 
@@ -172,25 +178,39 @@ export default function App() {
       requestedQuantity < 1
     ) {
       showToast('Invalid product or quantity.');
-      return;
+      return false;
     }
 
-    // Immediate check for the current rendered cart.
-    if (cartCount + requestedQuantity > MAX_ITEMS) {
-      showToast(`Maximum of ${MAX_ITEMS} items per order only.`);
-      return;
+    const currentCount = getTotalItemCount(cart);
+
+    if (currentCount + requestedQuantity > MAX_ITEMS) {
+      showToast(MAX_ITEMS_MESSAGE);
+      return false;
+    }
+
+    const existingItem = cart.find(
+      (item) => String(item.id) === String(product.id)
+    );
+
+    const updatedProductQuantity =
+      getQuantity(existingItem || { quantity: 0 }) +
+      requestedQuantity;
+
+    if (updatedProductQuantity < 1) {
+      showToast('Invalid product or quantity.');
+      return false;
     }
 
     setCart((previousCart) => {
-      const currentCount = getTotalItemCount(previousCart);
+      const latestCount = getTotalItemCount(previousCart);
+
+      if (latestCount + requestedQuantity > MAX_ITEMS) {
+        return previousCart;
+      }
 
       const existingIndex = previousCart.findIndex(
         (item) => String(item.id) === String(product.id)
       );
-
-      if (currentCount + requestedQuantity > MAX_ITEMS) {
-        return previousCart;
-      }
 
       if (existingIndex !== -1) {
         return previousCart.map((item, index) =>
@@ -218,9 +238,10 @@ export default function App() {
     });
 
     showToast(`${product.name} added to cart!`);
+    return true;
   };
 
-  // Update quantity using the latest cart state.
+  // Update an existing cart item without exceeding the total limit.
   const handleUpdateQuantity = (productId, newQuantity) => {
     const requestedQuantity = Number(newQuantity);
 
@@ -231,38 +252,50 @@ export default function App() {
       return;
     }
 
+    const targetIndex = cart.findIndex(
+      (item) => String(item.id) === String(productId)
+    );
+
+    if (targetIndex === -1) return;
+
+    const otherItemsCount = cart.reduce(
+      (sum, item, index) => {
+        if (index === targetIndex) return sum;
+        return sum + getQuantity(item);
+      },
+      0
+    );
+
+    if (otherItemsCount + requestedQuantity > MAX_ITEMS) {
+      showToast(MAX_ITEMS_MESSAGE);
+      return;
+    }
+
+    if (getQuantity(cart[targetIndex]) === requestedQuantity) {
+      return;
+    }
+
     setCart((previousCart) => {
-      const targetIndex = previousCart.findIndex(
+      const latestTargetIndex = previousCart.findIndex(
         (item) => String(item.id) === String(productId)
       );
 
-      if (targetIndex === -1) {
-        return previousCart;
-      }
+      if (latestTargetIndex === -1) return previousCart;
 
-      const otherItemsCount = previousCart.reduce(
+      const latestOtherItemsCount = previousCart.reduce(
         (sum, item, index) => {
-          if (index === targetIndex) return sum;
+          if (index === latestTargetIndex) return sum;
           return sum + getQuantity(item);
         },
         0
       );
 
-      // Do not allow more than 10 items across all products.
-      if (otherItemsCount + requestedQuantity > MAX_ITEMS) {
-        return previousCart;
-      }
-
-      const currentQuantity = getQuantity(
-        previousCart[targetIndex]
-      );
-
-      if (currentQuantity === requestedQuantity) {
+      if (latestOtherItemsCount + requestedQuantity > MAX_ITEMS) {
         return previousCart;
       }
 
       return previousCart.map((item, index) =>
-        index === targetIndex
+        index === latestTargetIndex
           ? { ...item, quantity: requestedQuantity }
           : item
       );
@@ -284,9 +317,7 @@ export default function App() {
     }
 
     if (cartCount > MAX_ITEMS) {
-      showToast(
-        `Your cart has ${cartCount} items. The maximum is ${MAX_ITEMS}.`
-      );
+      showToast(MAX_ITEMS_MESSAGE);
       return;
     }
 
@@ -296,9 +327,7 @@ export default function App() {
 
   const handleCustomerInfoSubmit = (info) => {
     if (cartCount < 1 || cartCount > MAX_ITEMS) {
-      showToast(
-        `Your order must contain between 1 and ${MAX_ITEMS} items.`
-      );
+      showToast(MAX_ITEMS_MESSAGE);
       setCurrentPage('cart');
       return;
     }
@@ -319,10 +348,7 @@ export default function App() {
       setPendingInfo(null);
       setAcceptedTerms(false);
       setCurrentPage('cart');
-
-      showToast(
-        `Your order must contain between 1 and ${MAX_ITEMS} items.`
-      );
+      showToast(MAX_ITEMS_MESSAGE);
       return;
     }
 
@@ -434,9 +460,7 @@ export default function App() {
       {currentPage === 'menu' && (
         <MenuPage
           onBack={() => setCurrentPage('home')}
-          onSelectCategory={(categoryId) =>
-            setCurrentPage(categoryId)
-          }
+          onSelectCategory={(categoryId) => setCurrentPage(categoryId)}
           onCart={() => setCurrentPage('cart')}
           cartCount={cartCount}
         />
@@ -447,6 +471,8 @@ export default function App() {
           onBack={() => setCurrentPage('menu')}
           onCart={() => setCurrentPage('cart')}
           cartCount={cartCount}
+          maxQuantity={remainingSlots}
+          onLimitReached={() => showToast(MAX_ITEMS_MESSAGE)}
           onAddToCart={handleAddToCart}
         />
       )}
@@ -456,6 +482,8 @@ export default function App() {
           onBack={() => setCurrentPage('menu')}
           onCart={() => setCurrentPage('cart')}
           cartCount={cartCount}
+          maxQuantity={remainingSlots}
+          onLimitReached={() => showToast(MAX_ITEMS_MESSAGE)}
           onAddToCart={handleAddToCart}
         />
       )}
@@ -465,6 +493,8 @@ export default function App() {
           onBack={() => setCurrentPage('menu')}
           onCart={() => setCurrentPage('cart')}
           cartCount={cartCount}
+          maxQuantity={remainingSlots}
+          onLimitReached={() => showToast(MAX_ITEMS_MESSAGE)}
           onAddToCart={handleAddToCart}
         />
       )}
@@ -494,9 +524,7 @@ export default function App() {
           onBack={() => setCurrentPage('customer-info')}
           onPaid={() => {
             if (cartCount < 1 || cartCount > MAX_ITEMS) {
-              showToast(
-                `Your order must contain between 1 and ${MAX_ITEMS} items.`
-              );
+              showToast(MAX_ITEMS_MESSAGE);
               setCurrentPage('cart');
               return;
             }
@@ -532,9 +560,7 @@ export default function App() {
           proofUrl={proofUrl}
           onNewOrder={handleNewOrder}
           onTrack={() => {
-            setTrackPrefill(
-              confirmedOrder?.order_number || ''
-            );
+            setTrackPrefill(confirmedOrder?.order_number || '');
             setCurrentPage('track');
           }}
         />
@@ -685,11 +711,9 @@ export default function App() {
                       <span>
                         {item.name} × {item.quantity}
                       </span>
-
                       <span>
                         {formatPeso(
-                          (Number(item.price) || 0) *
-                            getQuantity(item)
+                          (Number(item.price) || 0) * getQuantity(item)
                         )}
                       </span>
                     </div>
@@ -771,7 +795,6 @@ export default function App() {
                       cursor: 'pointer',
                     }}
                   />
-
                   <span>
                     I have read and agree to the Terms &amp; Conditions.
                     <span style={{ color: '#dc2626' }}> *</span>
@@ -793,9 +816,7 @@ export default function App() {
                     disabled={!acceptedTerms}
                     style={{
                       opacity: acceptedTerms ? 1 : 0.5,
-                      cursor: acceptedTerms
-                        ? 'pointer'
-                        : 'not-allowed',
+                      cursor: acceptedTerms ? 'pointer' : 'not-allowed',
                     }}
                   >
                     CONFIRM &amp; CONTINUE

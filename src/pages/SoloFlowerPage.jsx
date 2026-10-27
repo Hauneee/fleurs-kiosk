@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { ProductGrid } from '../components/ProductGrid';
@@ -12,8 +13,10 @@ export const SoloFlowerPage = ({
   onBack,
   onCart,
   cartCount = 0,
+  maxQuantity = 10,
+  onLimitReached,
   onAddToCart,
-  onAdmin
+  onAdmin,
 }) => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,11 +27,14 @@ export const SoloFlowerPage = ({
     try {
       setLoading(true);
       setError(null);
+
       const data = await fetchProducts('solo-flower');
       setProducts(data);
     } catch (err) {
       console.error('Failed to load solo flowers:', err);
-      setError('Unable to load solo flowers from the database. Please try again.');
+      setError(
+        'Unable to load solo flowers from the database. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -53,13 +59,18 @@ export const SoloFlowerPage = ({
         {loading ? (
           <LoadingScreen message="Harvesting single stems..." />
         ) : error ? (
-          <ErrorMessage message={error} onRetry={loadProducts} />
+          <ErrorMessage
+            message={error}
+            onRetry={loadProducts}
+          />
         ) : (
           <div style={{ flex: 1, width: '100%' }}>
             <ProductGrid
               products={products}
               columns={3}
-              onSelectProduct={(product) => setSelectedProduct(product)}
+              onSelectProduct={(product) =>
+                setSelectedProduct(product)
+              }
             />
           </div>
         )}
@@ -71,6 +82,8 @@ export const SoloFlowerPage = ({
         isOpen={Boolean(selectedProduct)}
         onClose={() => setSelectedProduct(null)}
         onAddToCart={onAddToCart}
+        maxQuantity={maxQuantity}
+        onLimitReached={onLimitReached}
       />
     </div>
   );
