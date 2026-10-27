@@ -1,16 +1,22 @@
-
 import React from 'react';
 import { BowSvg } from './Decorations';
 import { getStockInfo } from '../utils/stock';
 
 export const ProductCard = ({ product, onSelect }) => {
-  const stockInfo = product.stockInfo || getStockInfo(product);
-  const { soldOut, low, qty } = stockInfo;
+  const stockInfo = getStockInfo(product);
+  const { soldOut, qty } = stockInfo;
+
   const stockUnknown = qty === null;
+  const unavailable = soldOut || stockUnknown;
 
   const handleSelect = () => {
-    if (soldOut || stockUnknown) return;
-    onSelect?.(product);
+    // Huwag buksan ang product kapag walang stock
+    // o hindi alam ang stock.
+    if (unavailable) return;
+
+    if (typeof onSelect === 'function') {
+      onSelect({ ...product, stockInfo });
+    }
   };
 
   const handleKeyDown = (event) => {
@@ -26,16 +32,16 @@ export const ProductCard = ({ product, onSelect }) => {
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
       role="button"
-      tabIndex={soldOut || stockUnknown ? -1 : 0}
-      aria-disabled={soldOut || stockUnknown}
+      tabIndex={unavailable ? -1 : 0}
+      aria-disabled={unavailable}
       style={{
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
         padding: '12px',
-        cursor: soldOut || stockUnknown ? 'not-allowed' : 'pointer',
-        opacity: soldOut ? 0.7 : 1,
+        cursor: unavailable ? 'not-allowed' : 'pointer',
+        opacity: soldOut ? 0.65 : 1,
       }}
     >
       <div
@@ -53,48 +59,22 @@ export const ProductCard = ({ product, onSelect }) => {
 
       <div
         className="price-badge"
-        style={{ alignSelf: 'flex-end', position: 'relative', zIndex: 3 }}
+        style={{
+          alignSelf: 'flex-end',
+          position: 'relative',
+          zIndex: 3,
+        }}
       >
         ₱{Number(product.price).toLocaleString()}
       </div>
 
       <div
-        role="status"
+        className="image-frame"
         style={{
           width: '100%',
-          padding: '10px 8px',
-          borderRadius: '10px',
-          boxSizing: 'border-box',
-          textAlign: 'center',
-          fontSize: '0.85rem',
-          fontWeight: 900,
-          background: stockUnknown
-            ? '#e5e7eb'
-            : soldOut
-              ? '#991b1b'
-              : low
-                ? '#fff0c2'
-                : '#dcfce7',
-          color: stockUnknown
-            ? '#374151'
-            : soldOut
-              ? '#ffffff'
-              : low
-                ? '#92400e'
-                : '#166534',
-          border: '1px solid #d1d5db',
+          overflow: 'hidden',
+          position: 'relative',
         }}
-      >
-        {stockUnknown
-          ? 'STOCK UNKNOWN'
-          : soldOut
-            ? 'OUT OF STOCK'
-            : `ONLY ${qty} LEFT`}
-      </div>
-
-      <div
-        className="image-frame"
-        style={{ width: '100%', overflow: 'hidden', position: 'relative' }}
       >
         {product.image_url ? (
           <img
@@ -114,32 +94,60 @@ export const ProductCard = ({ product, onSelect }) => {
         )}
       </div>
 
+      {/* PRODUCT NAME */}
       <h3 className="product-title" style={{ margin: 0 }}>
         {product.name}
       </h3>
 
-      <p
+      {/* STOCK TEXT: directly below the product name */}
+      <div
+        role="status"
+        aria-live="polite"
         style={{
-          margin: 0,
-          fontSize: '0.85rem',
-          fontWeight: 700,
-          color: stockUnknown || soldOut ? '#991b1b' : low ? '#92400e' : '#166534',
+          display: 'block',
+          width: '100%',
+          boxSizing: 'border-box',
+          padding: '10px 8px',
+          borderRadius: '8px',
+          textAlign: 'center',
+          fontSize: '0.9rem',
+          fontWeight: 900,
+          lineHeight: 1.4,
+          background: stockUnknown
+            ? '#e5e7eb'
+            : soldOut
+              ? '#fee2e2'
+              : qty <= 10
+                ? '#fef3c7'
+                : '#dcfce7',
+          color: stockUnknown
+            ? '#374151'
+            : soldOut
+              ? '#991b1b'
+              : qty <= 10
+                ? '#92400e'
+                : '#166534',
+          border: `1px solid ${
+            unavailable ? '#fecaca' : '#d1d5db'
+          }`,
         }}
       >
         {stockUnknown
-          ? 'Stock information unavailable'
+          ? 'STOCK UNAVAILABLE'
           : soldOut
-            ? 'Currently unavailable'
-            : `${qty} ${qty === 1 ? 'item' : 'items'} remaining`}
-      </p>
+            ? 'NO STOCK'
+            : `ONLY ${qty} STOCK REMAINING`}
+      </div>
 
+      {/* DISABLED LABEL WHEN OUT OF STOCK */}
       <div
         style={{
           marginTop: '4px',
           textAlign: 'center',
           fontSize: '0.8rem',
           fontWeight: 800,
-          color: soldOut || stockUnknown ? '#991b1b' : '#3b82f6',
+          color: unavailable ? '#991b1b' : '#3b82f6',
+          cursor: unavailable ? 'not-allowed' : 'pointer',
         }}
       >
         {soldOut
