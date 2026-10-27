@@ -1532,7 +1532,11 @@
     </div>`;
   }
 
-  function resolveProofUrl(value) {
+  // PROOF PHOTO
+  // Uses a signed URL so it works whether the order-proofs bucket
+  // is private or public. Needs a SELECT policy on storage.objects
+  // for the "order-proofs" bucket (see the SQL policy in the chat).
+  async function resolveProofUrl(value) {
     if (!value || typeof value !== "string") return "";
 
     const raw = value.trim();
@@ -1544,15 +1548,22 @@
       .replace(/^\/+/, "")
       .replace(/^proofs\//, "");
 
-    const { data } = sb.storage.from(PROOF_BUCKET).getPublicUrl(path);
+    const { data, error } = await sb.storage
+      .from(PROOF_BUCKET)
+      .createSignedUrl(path, 3600);
 
-    return data?.publicUrl || "";
+    if (error) {
+      console.warn("Proof photo URL failed:", error.message);
+      return "";
+    }
+
+    return data?.signedUrl || "";
   }
 
   function proofSection(o) {
     const raw = proofValue(o);
 
-      if (!raw) {
+    if (!raw) {
       const kind = paymentKind(o);
       const ref = first(o, PAY_REF_KEYS, "");
 
@@ -1567,35 +1578,56 @@
       </div>`;
     }
 
-    const url = resolveProofUrl(String(raw));
-
-    if (!url) {
-      return `<div class="detail-section">
-        <h3>Proof photos</h3>
-        <div class="proof-placeholder">
-          Could not create the photo URL. Check the Storage bucket and file path.
-        </div>
-        <div class="small muted wrap">${esc(raw)}</div>
-      </div>`;
-    }
-
     return `<div class="detail-section">
       <h3>Proof photos</h3>
       <div class="proof-grid">
         <div class="proof-card">
           <strong>Proof of payment</strong>
-          <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">
-            <img src="${esc(url)}" alt="Proof of payment" loading="lazy"
-              style="max-width:100%;max-height:400px;object-fit:contain;"
-              onerror="this.style.display='none';this.nextElementSibling.classList.remove('hidden')">
-            <div class="proof-placeholder hidden">
-              Image could not be loaded. Check Storage permissions or the image path.
-            </div>
+          <div class="proof-placeholder" id="proofStatus">Loading photo…</div>
+          <a id="proofLink" class="hidden" href="#" target="_blank" rel="noopener noreferrer">
+            <img id="proofImg" alt="Proof of payment"
+              style="max-width:100%;max-height:400px;object-fit:contain;">
           </a>
           <div class="small muted wrap" style="margin-top:8px">${esc(raw)}</div>
         </div>
       </div>
     </div>`;
+  }
+
+  let proofToken = 0;
+
+  async function loadProofImage(raw) {
+    const token = ++proofToken;
+
+    const url = await resolveProofUrl(String(raw));
+
+    // Ignore this result if another order was opened in the meantime.
+    if (token !== proofToken) return;
+
+    const status = $("proofStatus");
+    const img = $("proofImg");
+    const link = $("proofLink");
+
+    if (!status || !img || !link) return;
+
+    if (!url) {
+      status.textContent =
+        "Could not create the photo link. Check the Storage policy for the order-proofs bucket.";
+      return;
+    }
+
+    img.onload = () => {
+      status.classList.add("hidden");
+      link.classList.remove("hidden");
+    };
+
+    img.onerror = () => {
+      status.textContent =
+        "Image could not be loaded. Check that the file exists in Storage.";
+    };
+
+    link.href = url;
+    img.src = url;
   }
 
   function openOrderDetails(id) {
@@ -1699,6 +1731,10 @@
     `;
 
     $("orderModal").classList.remove("hidden");
+
+    const proofRaw = proofValue(o);
+
+    if (proofRaw) loadProofImage(proofRaw);
   }
 
   // PRODUCT CATEGORIES
