@@ -55,6 +55,15 @@ const getQuantity = (item) =>
 const getTotalItemCount = (items) =>
   items.reduce((sum, item) => sum + getQuantity(item), 0);
 
+const getItemsTotal = (items) =>
+  Math.round(
+    items.reduce(
+      (sum, item) =>
+        sum + (Number(item.price) || 0) * getQuantity(item),
+      0
+    ) * 100
+  ) / 100;
+
 const getCheckoutKey = () => {
   let key = sessionStorage.getItem(CHECKOUT_KEY);
 
@@ -120,6 +129,10 @@ export default function App() {
     }
   });
 
+  // null = normal cart checkout.
+  // An array = Checkout Now for selected product(s) only.
+  const [checkoutItems, setCheckoutItems] = useState(null);
+
   const [customerInfo, setCustomerInfo] = useState(EMPTY_CUSTOMER);
   const [confirmedOrder, setConfirmedOrder] = useState(null);
   const [trackPrefill, setTrackPrefill] = useState('');
@@ -141,6 +154,7 @@ export default function App() {
     setToastVisible(true);
   }, []);
 
+  // Save the cart separately from Checkout Now items.
   useEffect(() => {
     try {
       sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
@@ -167,165 +181,177 @@ export default function App() {
     };
   }, []);
 
+  // Do not redirect away from Checkout Now just because the cart is empty.
   useEffect(() => {
-    if (cart.length === 0 && CHECKOUT_PAGES.includes(currentPage)) {
+    const itemsBeingCheckedOut = checkoutItems ?? cart;
+
+    if (
+      itemsBeingCheckedOut.length === 0 &&
+      CHECKOUT_PAGES.includes(currentPage)
+    ) {
       setCurrentPage('cart');
     }
-  }, [cart.length, currentPage]);
+  }, [cart, checkoutItems, currentPage]);
 
   const cartCount = getTotalItemCount(cart);
   const remainingSlots = Math.max(0, MAX_ITEMS - cartCount);
+  const cartTotal = getItemsTotal(cart);
 
-  const cartTotal =
-    Math.round(
-      cart.reduce(
-        (sum, item) =>
-          sum + (Number(item.price) || 0) * getQuantity(item),
-        0
-      ) * 100
-    ) / 100;
+  // These values always describe the order currently being checked out.
+  const activeCheckoutItems = checkoutItems ?? cart;
+  const checkoutItemCount = getTotalItemCount(activeCheckoutItems);
+  const checkoutTotal = getItemsTotal(activeCheckoutItems);
 
-  // Verify inventory directly from Supabase.
-  // Do not use fetchProducts() because it may return demo products
-  // when the database request fails.
-  const refreshCartStock = useCallback(async () => {
-    if (cart.length === 0) {
-      return {
-        valid: true,
-        items: [],
-        verified: Boolean(supabase),
-      };
-    }
-
-    if (!supabase) {
-      return {
-        valid: true,
-        items: cart,
-        verified: false,
-      };
-    }
-
-    try {
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_active', true);
-
-      if (error) throw error;
-
-      if (!Array.isArray(products)) {
-        throw new Error('Invalid product inventory response.');
+  // Verify inventory for the supplied items.
+  // Only synchronize with the saved cart during regular cart checkout.
+  const refreshCartStock = useCallback(
+    async (itemsToCheck = cart, syncCart = true) => {
+      if (itemsToCheck.length === 0) {
+        return {
+          valid: true,
+          items: [],
+          verified: Boolean(supabase),
+        };
       }
 
-      const productMap = new Map(
-        products.map((product) => [String(product.id), product])
-      );
+      if (!supabase) {
+        return {
+          valid: true,
+          items: itemsToCheck,
+          verified: false,
+        };
+      }
 
-      const refreshedItems = cart.map((item) => {
-        const productId = item.product_id ?? item.id;
-        const latestProduct = productMap.get(String(productId));
+      try {
+        const { data: products, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true);
 
-        if (!latestProduct) {
+        if (error) throw error;
+
+        if (!Array.isArray(products)) {
+          throw new Error('Invalid product inventory response.');
+        }
+
+        const productMap = new Map(
+          products.map((product) => [
+            String(product.id),
+            product,
+          ])
+        );
+
+        const refreshedItems = itemsToCheck.map((item) => {
+          const productId = item.product_id ?? item.id;
+          const latestProduct = productMap.get(String(productId));
+
+          if (!latestProduct) {
+            return {
+              ...item,
+              _stockUnavailable: true,
+            };
+          }
+
           return {
             ...item,
-            _stockUnavailable: true,
+            ...latestProduct,
+            id: item.id,
+            product_id: productId,
+            quantity: getQuantity(item),
+            _stockUnavailable: false,
+          };
+        });
+
+        const unavailable = refreshedItems.find(
+          (item) => item._stockUnavailable
+        );
+
+        if (unavailable) {
+          if (syncCart) {
+            setCart((previousCart) =>
+              previousCart.map((item) => {
+                const refreshed = refreshedItems.find(
+                  (fresh) =>
+                    String(fresh.id) === String(item.id)
+                );
+
+                return refreshed || item;
+              })
+            );
+          }
+
+          return {
+            valid: false,
+            items: refreshedItems,
+            verified: true,
+            message: `${
+              unavailable.name || 'A product'
+            } is no longer available. Please remove it from your cart.`,
+          };
+        }
+
+        const invalidItem = refreshedItems.find((item) => {
+          const { qty } = getStockInfo(item);
+
+          return qty !== null && getQuantity(item) > qty;
+        });
+
+        if (syncCart) {
+          setCart((previousCart) => {
+            const unchanged =
+              previousCart.length === refreshedItems.length &&
+              previousCart.every((item, index) => {
+                const fresh = refreshedItems[index];
+
+                return (
+                  String(item.id) === String(fresh.id) &&
+                  item.name === fresh.name &&
+                  Number(item.price) === Number(fresh.price) &&
+                  getQuantity(item) === getQuantity(fresh) &&
+                  item._stockUnavailable ===
+                    fresh._stockUnavailable &&
+                  JSON.stringify(getStockInfo(item)) ===
+                    JSON.stringify(getStockInfo(fresh))
+                );
+              });
+
+            return unchanged ? previousCart : refreshedItems;
+          });
+        }
+
+        if (invalidItem) {
+          const { qty } = getStockInfo(invalidItem);
+
+          return {
+            valid: false,
+            items: refreshedItems,
+            verified: true,
+            message:
+              qty === 0
+                ? `${invalidItem.name} is out of stock.`
+                : `Only ${qty} unit(s) of ${invalidItem.name} are available. Please update your cart.`,
           };
         }
 
         return {
-          ...item,
-          ...latestProduct,
-          id: item.id,
-          product_id: productId,
-          quantity: getQuantity(item),
-          _stockUnavailable: false,
+          valid: true,
+          items: refreshedItems,
+          verified: true,
         };
-      });
-
-      const unavailable = refreshedItems.find(
-        (item) => item._stockUnavailable
-      );
-
-      if (unavailable) {
-        setCart((previousCart) =>
-          previousCart.map((item) => {
-            const refreshed = refreshedItems.find(
-              (fresh) => String(fresh.id) === String(item.id)
-            );
-
-            return refreshed || item;
-          })
-        );
+      } catch (error) {
+        console.error('Live stock verification failed:', error);
 
         return {
           valid: false,
-          items: refreshedItems,
-          verified: true,
-          message: `${
-            unavailable.name || 'A product'
-          } is no longer available. Please remove it from your cart.`,
-        };
-      }
-
-      const invalidItem = refreshedItems.find((item) => {
-        const { qty } = getStockInfo(item);
-
-        return qty !== null && getQuantity(item) > qty;
-      });
-
-      // UPDATED: compare stock information too, not just product
-      // details and quantity, before deciding whether the cart changed.
-      setCart((previousCart) => {
-        const unchanged =
-          previousCart.length === refreshedItems.length &&
-          previousCart.every((item, index) => {
-            const fresh = refreshedItems[index];
-
-            return (
-              String(item.id) === String(fresh.id) &&
-              item.name === fresh.name &&
-              Number(item.price) === Number(fresh.price) &&
-              getQuantity(item) === getQuantity(fresh) &&
-              item._stockUnavailable === fresh._stockUnavailable &&
-              JSON.stringify(getStockInfo(item)) ===
-                JSON.stringify(getStockInfo(fresh))
-            );
-          });
-
-        return unchanged ? previousCart : refreshedItems;
-      });
-
-      if (invalidItem) {
-        const { qty } = getStockInfo(invalidItem);
-
-        return {
-          valid: false,
-          items: refreshedItems,
-          verified: true,
+          items: itemsToCheck,
+          verified: false,
           message:
-            qty === 0
-              ? `${invalidItem.name} is out of stock.`
-              : `Only ${qty} unit(s) of ${invalidItem.name} are available. Please update your cart.`,
+            'Unable to verify live stock. Check your connection and try again.',
         };
       }
-
-      return {
-        valid: true,
-        items: refreshedItems,
-        verified: true,
-      };
-    } catch (error) {
-      console.error('Live stock verification failed:', error);
-
-      return {
-        valid: false,
-        items: cart,
-        verified: false,
-        message:
-          'Unable to verify live stock. Check your connection and try again.',
-      };
-    }
-  }, [cart]);
+    },
+    [cart]
+  );
 
   const handleAddToCart = (product, quantity = 1) => {
     const requestedQuantity = Number(quantity);
@@ -417,13 +443,56 @@ export default function App() {
     return true;
   };
 
+  // Checkout Now: prepare a separate order without adding anything to cart.
   const handleCheckoutNow = (product, quantity = 1) => {
-    const added = handleAddToCart(product, quantity);
+    const requestedQuantity = Number(quantity);
 
-    if (!added) return false;
+    if (
+      !product ||
+      product.id == null ||
+      !Number.isInteger(requestedQuantity) ||
+      requestedQuantity < 1
+    ) {
+      showToast('Invalid product or quantity.');
+      return false;
+    }
 
+    if (requestedQuantity > MAX_ITEMS) {
+      showToast(MAX_ITEMS_MESSAGE);
+      return false;
+    }
+
+    const stockInfo = getStockInfo(product);
+
+    if (stockInfo.soldOut) {
+      showToast('Sorry, this product is out of stock.');
+      return false;
+    }
+
+    const availableStock = remainingToAdd(product, 0);
+
+    if (requestedQuantity > availableStock) {
+      showToast(
+        availableStock <= 0
+          ? 'This product is out of stock.'
+          : `Only ${availableStock} unit(s) are available.`
+      );
+      return false;
+    }
+
+    const selectedItem = {
+      ...product,
+      id: product.id,
+      product_id: product.product_id ?? product.id,
+      quantity: requestedQuantity,
+    };
+
+    setCheckoutItems([selectedItem]);
     setPendingInfo(null);
+    setAcceptedTerms(false);
+    setShowFullTerms(false);
     setCurrentPage('customer-info');
+
     return true;
   };
 
@@ -527,7 +596,10 @@ export default function App() {
       return;
     }
 
-    const result = await refreshCartStock();
+    // Explicitly choose normal cart checkout.
+    setCheckoutItems(null);
+
+    const result = await refreshCartStock(cart, true);
 
     if (!result.valid) {
       showToast(
@@ -537,13 +609,15 @@ export default function App() {
     }
 
     setPendingInfo(null);
+    setAcceptedTerms(false);
+    setShowFullTerms(false);
     setCurrentPage('customer-info');
   };
 
   const handleCustomerInfoSubmit = (info) => {
-    if (cartCount < 1 || cartCount > MAX_ITEMS) {
+    if (checkoutItemCount < 1 || checkoutItemCount > MAX_ITEMS) {
       showToast(MAX_ITEMS_MESSAGE);
-      setCurrentPage('cart');
+      setCurrentPage(checkoutItems !== null ? 'menu' : 'cart');
       return;
     }
 
@@ -559,10 +633,10 @@ export default function App() {
   const handleConfirmOrder = () => {
     if (!pendingInfo || !acceptedTerms) return;
 
-    if (cartCount < 1 || cartCount > MAX_ITEMS) {
+    if (checkoutItemCount < 1 || checkoutItemCount > MAX_ITEMS) {
       setPendingInfo(null);
       setAcceptedTerms(false);
-      setCurrentPage('cart');
+      setCurrentPage(checkoutItems !== null ? 'menu' : 'cart');
       showToast(MAX_ITEMS_MESSAGE);
       return;
     }
@@ -573,7 +647,9 @@ export default function App() {
     setCurrentPage('payment');
   };
 
-  const handleOrderSuccess = (orderData) => {
+  // Preserve the cart after Checkout Now.
+  // Only a regular cart checkout clears the cart after a successful order.
+  const handleOrderSuccess = (orderData, clearCart = true) => {
     if (supabase && orderData?.order_number) {
       supabase.functions
         .invoke('super-api', {
@@ -588,12 +664,18 @@ export default function App() {
     }
 
     setConfirmedOrder(orderData);
-    setCart([]);
+
+    if (clearCart) {
+      setCart([]);
+      sessionStorage.removeItem(CART_STORAGE_KEY);
+    }
+
+    setCheckoutItems(null);
     setCustomerInfo(EMPTY_CUSTOMER);
     setPendingInfo(null);
     setAcceptedTerms(false);
+    setShowFullTerms(false);
 
-    sessionStorage.removeItem(CART_STORAGE_KEY);
     sessionStorage.removeItem(CHECKOUT_KEY);
     sessionStorage.removeItem('fleurs_pay_ref');
     sessionStorage.removeItem('fleurs_payment_method');
@@ -605,9 +687,16 @@ export default function App() {
   const handlePaymentComplete = async () => {
     if (isSavingOrder) return;
 
-    if (cartCount < 1 || cartCount > MAX_ITEMS) {
+    const itemsForThisOrder = checkoutItems ?? cart;
+    const itemCountForThisOrder = getTotalItemCount(itemsForThisOrder);
+    const totalForThisOrder = getItemsTotal(itemsForThisOrder);
+
+    if (
+      itemCountForThisOrder < 1 ||
+      itemCountForThisOrder > MAX_ITEMS
+    ) {
       showToast(MAX_ITEMS_MESSAGE);
-      setCurrentPage('cart');
+      setCurrentPage(checkoutItems !== null ? 'menu' : 'cart');
       return;
     }
 
@@ -617,7 +706,7 @@ export default function App() {
       .toLowerCase();
 
     const isCash = method === 'cash';
-    const amount = Number(cartTotal) || 0;
+    const amount = Number(totalForThisOrder) || 0;
     const cashReceived = Number(paymentInfo.cashReceived) || 0;
     const change = Math.max(0, cashReceived - amount);
     const paidRef = sessionStorage.getItem('fleurs_pay_ref');
@@ -647,15 +736,20 @@ export default function App() {
     setIsSavingOrder(true);
 
     try {
-      const stockCheck = await refreshCartStock();
+      const isCartCheckout = checkoutItems === null;
+
+      const stockCheck = await refreshCartStock(
+        itemsForThisOrder,
+        isCartCheckout
+      );
 
       if (!stockCheck.valid) {
         showToast(
           stockCheck.message ||
-            'Stock changed. Please review your cart.'
+            'Stock changed. Please review your items.'
         );
 
-        setCurrentPage('cart');
+        setCurrentPage(isCartCheckout ? 'cart' : 'customer-info');
         return;
       }
 
@@ -664,7 +758,7 @@ export default function App() {
           'Live inventory could not be verified. Please try again.'
         );
 
-        setCurrentPage('cart');
+        setCurrentPage(isCartCheckout ? 'cart' : 'customer-info');
         return;
       }
 
@@ -703,7 +797,7 @@ export default function App() {
         change_amount: isCash ? change : 0,
       };
 
-      handleOrderSuccess(completeOrder);
+      handleOrderSuccess(completeOrder, isCartCheckout);
     } catch (error) {
       console.error('Order save failed:', error);
 
@@ -718,6 +812,7 @@ export default function App() {
 
   const handleNewOrder = () => {
     setCart([]);
+    setCheckoutItems(null);
     setCustomerInfo(EMPTY_CUSTOMER);
     setConfirmedOrder(null);
     setPendingInfo(null);
@@ -853,15 +948,26 @@ export default function App() {
       {currentPage === 'customer-info' && (
         <CustomerInfoPage
           initialValues={customerInfo}
-          onBack={() => setCurrentPage('cart')}
+          onBack={() => {
+            setPendingInfo(null);
+            setAcceptedTerms(false);
+            setShowFullTerms(false);
+
+            if (checkoutItems !== null) {
+              setCheckoutItems(null);
+              setCurrentPage('menu');
+            } else {
+              setCurrentPage('cart');
+            }
+          }}
           onContinue={handleCustomerInfoSubmit}
         />
       )}
 
       {currentPage === 'payment' && (
         <PaymentPage
-          cart={cart}
-          totalAmount={cartTotal}
+          cart={activeCheckoutItems}
+          totalAmount={checkoutTotal}
           onBack={() => setCurrentPage('customer-info')}
           onPaid={handlePaymentComplete}
         />
@@ -1023,7 +1129,7 @@ export default function App() {
                     marginBottom: '14px',
                   }}
                 >
-                  {cart.map((item) => (
+                  {activeCheckoutItems.map((item) => (
                     <div
                       key={item.id}
                       style={{
@@ -1061,7 +1167,7 @@ export default function App() {
                     }}
                   >
                     <span>TOTAL</span>
-                    <span>{formatPeso(cartTotal)}</span>
+                    <span>{formatPeso(checkoutTotal)}</span>
                   </div>
                 </div>
 
