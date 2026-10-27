@@ -5,7 +5,7 @@ import { ProductGrid } from '../components/ProductGrid';
 import { ProductModal } from '../components/ProductModal';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { fetchProducts } from '../services/supabase';
+import { fetchProducts, supabase } from '../services/supabase';
 import { getStockInfo } from '../pages/stock';
 import '../styles/shop.css';
 import '../styles/light.css';
@@ -27,17 +27,29 @@ export const BouquetPage = ({
 
   const loadProducts = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
 
       const data = await fetchProducts('bouquet');
 
-      setProducts(
-        (Array.isArray(data) ? data : []).map((product) => ({
-          ...product,
-          stockInfo: getStockInfo(product),
-        }))
-      );
+      const updatedProducts = (
+        Array.isArray(data) ? data : []
+      ).map((product) => ({
+        ...product,
+        stockInfo: getStockInfo(product),
+      }));
+
+      setProducts(updatedProducts);
+
+      // Keep the open product modal in sync too.
+      setSelectedProduct((current) => {
+        if (!current) return null;
+
+        return (
+          updatedProducts.find(
+            (product) => product.id === current.id
+          ) ?? current
+        );
+      });
     } catch (err) {
       console.error('Failed to load bouquet products:', err);
       setError(
@@ -48,8 +60,42 @@ export const BouquetPage = ({
     }
   }, []);
 
+  // Initial product load.
   useEffect(() => {
     loadProducts();
+  }, [loadProducts]);
+
+  // Automatically reload bouquets when products change in Supabase.
+  useEffect(() => {
+    if (!supabase) {
+      console.error('Supabase client is unavailable.');
+      return;
+    }
+
+    const channel = supabase
+      .channel('kiosk-bouquet-stock-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'products',
+        },
+        () => {
+          loadProducts();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.error(
+            'Bouquet stock Realtime subscription failed.'
+          );
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [loadProducts]);
 
   const handleSelectProduct = (product) => {
@@ -60,7 +106,10 @@ export const BouquetPage = ({
       return;
     }
 
-    setSelectedProduct(product);
+    setSelectedProduct({
+      ...product,
+      stockInfo,
+    });
   };
 
   return (

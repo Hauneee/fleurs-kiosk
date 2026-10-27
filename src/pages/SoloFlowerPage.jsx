@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from '../components/Header';
 import { ProductModal } from '../components/ProductModal';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { fetchProducts } from '../services/supabase';
+import { fetchProducts, supabase } from '../services/supabase';
 import { getStockInfo } from '../pages/stock';
 import '../styles/shop.css';
 import '../styles/light.css';
@@ -25,21 +26,30 @@ export const SoloFlowerPage = ({
 
   const loadProducts = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
 
       const data = await fetchProducts('solo-flower');
 
-      const safeProducts = (Array.isArray(data) ? data : []).map(
-        (product) => ({
-          ...product,
-          stockInfo: getStockInfo(product),
-        })
-      );
+      const safeProducts = (
+        Array.isArray(data) ? data : []
+      ).map((product) => ({
+        ...product,
+        stockInfo: getStockInfo(product),
+      }));
 
       setProducts(safeProducts);
 
-      // Helpful diagnostic in the terminal running your app.
+      // Keep the open modal synchronized with the latest product data.
+      setSelectedProduct((current) => {
+        if (!current) return null;
+
+        return (
+          safeProducts.find(
+            (product) => product.id === current.id
+          ) ?? current
+        );
+      });
+
       console.info(
         '[SoloFlowerPage] Products and stock:',
         safeProducts.map((product) => ({
@@ -49,7 +59,11 @@ export const SoloFlowerPage = ({
         }))
       );
     } catch (err) {
-      console.error('Failed to load solo flower products:', err);
+      console.error(
+        'Failed to load solo flower products:',
+        err
+      );
+
       setError(
         'Unable to load solo flowers from the database. Please try again.'
       );
@@ -58,21 +72,61 @@ export const SoloFlowerPage = ({
     }
   }, []);
 
+  // Load products when this page opens.
   useEffect(() => {
     loadProducts();
+  }, [loadProducts]);
+
+  // Automatically reload products after Supabase changes.
+  useEffect(() => {
+    if (!supabase) {
+      console.error(
+        '[SoloFlowerPage] Supabase client is unavailable.'
+      );
+      return;
+    }
+
+    const channel = supabase
+      .channel('kiosk-solo-flower-stock-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'products',
+        },
+        (payload) => {
+          console.info(
+            '[SoloFlowerPage] Product change detected:',
+            payload.eventType
+          );
+
+          loadProducts();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(
+            '[SoloFlowerPage] Realtime subscription status:',
+            status
+          );
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [loadProducts]);
 
   const handleSelectProduct = (product) => {
     const stockInfo = getStockInfo(product);
 
     if (stockInfo.qty === null || stockInfo.soldOut) {
-      if (onLimitReached) {
-        onLimitReached(
-          stockInfo.soldOut
-            ? 'This flower is currently out of stock.'
-            : 'Stock information is unavailable. Please try again later.'
-        );
-      }
+      onLimitReached?.(
+        stockInfo.soldOut
+          ? 'This flower is currently out of stock.'
+          : 'Stock information is unavailable. Please try again later.'
+      );
       return;
     }
 
@@ -97,7 +151,10 @@ export const SoloFlowerPage = ({
         {loading ? (
           <LoadingScreen message="Preparing solo flowers..." />
         ) : error ? (
-          <ErrorMessage message={error} onRetry={loadProducts} />
+          <ErrorMessage
+            message={error}
+            onRetry={loadProducts}
+          />
         ) : products.length === 0 ? (
           <p style={{ padding: '24px', textAlign: 'center' }}>
             No solo flowers found.
@@ -133,7 +190,10 @@ export const SoloFlowerPage = ({
                   aria-disabled={unavailable}
                   onClick={() => handleSelectProduct(product)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
+                    if (
+                      event.key === 'Enter' ||
+                      event.key === ' '
+                    ) {
                       event.preventDefault();
                       handleSelectProduct(product);
                     }
@@ -168,7 +228,9 @@ export const SoloFlowerPage = ({
                           width: '100%',
                           height: '220px',
                           objectFit: 'cover',
-                          filter: soldOut ? 'grayscale(100%)' : 'none',
+                          filter: soldOut
+                            ? 'grayscale(100%)'
+                            : 'none',
                         }}
                       />
                     ) : (
@@ -192,7 +254,6 @@ export const SoloFlowerPage = ({
                     {product.name}
                   </h3>
 
-                  {/* STOCK MESSAGE DIRECTLY BELOW THE NAME */}
                   <div
                     role="status"
                     aria-live="polite"
@@ -245,8 +306,12 @@ export const SoloFlowerPage = ({
                       borderRadius: '8px',
                       fontWeight: 800,
                       fontSize: '13px',
-                      background: unavailable ? '#e5e7eb' : '#eff6ff',
-                      color: unavailable ? '#991b1b' : '#1d4ed8',
+                      background: unavailable
+                        ? '#e5e7eb'
+                        : '#eff6ff',
+                      color: unavailable
+                        ? '#991b1b'
+                        : '#1d4ed8',
                     }}
                   >
                     {soldOut

@@ -16,16 +16,19 @@ const savedKey = localStorage.getItem('fleurs_supabase_anon_key');
 const supabaseUrl = (savedUrl || envUrl).trim();
 const supabaseAnonKey = (savedKey || envAnonKey).trim();
 
-console.log('[FLEURS] Supabase configured:', Boolean(supabaseUrl && supabaseAnonKey));
+console.log(
+  '[FLEURS] Supabase configured:',
+  Boolean(supabaseUrl && supabaseAnonKey)
+);
 console.log('[FLEURS] Using saved URL:', Boolean(savedUrl));
 console.log('[FLEURS] Using saved key:', Boolean(savedKey));
 
 export const isSupabaseConfigured = () =>
   Boolean(
     supabaseUrl &&
-    supabaseAnonKey &&
-    !supabaseUrl.includes('your-project') &&
-    supabaseUrl.startsWith('https://')
+      supabaseAnonKey &&
+      !supabaseUrl.includes('your-project') &&
+      supabaseUrl.startsWith('https://')
   );
 
 export const supabase = isSupabaseConfigured()
@@ -93,7 +96,8 @@ export const checkSupabaseConnection = async () => {
   if (!isSupabaseConfigured() || !supabase) {
     return {
       connected: false,
-      message: 'Supabase credentials are not configured. Running offline/demo mode.',
+      message:
+        'Supabase credentials are not configured. Running offline/demo mode.',
     };
   }
 
@@ -173,8 +177,59 @@ export const fetchProducts = async (category = null) => {
     }))
   );
 
-  // Return the database rows directly so stock values are preserved.
   return products;
+};
+
+// ========================================
+// REALTIME PRODUCT CHANGES
+// ========================================
+
+export const subscribeToProductChanges = (onChange) => {
+  if (!supabase || !isSupabaseConfigured()) {
+    console.warn(
+      '[FLEURS] Product Realtime unavailable; using normal fetches.'
+    );
+
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel('fleurs-kiosk-products')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'products',
+      },
+      (payload) => {
+        console.info(
+          '[FLEURS] Product change detected:',
+          payload.eventType
+        );
+
+        if (typeof onChange === 'function') {
+          onChange(payload);
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.info('[FLEURS] Product Realtime status:', status);
+
+      if (
+        status === 'CHANNEL_ERROR' ||
+        status === 'TIMED_OUT'
+      ) {
+        console.error(
+          '[FLEURS] Product Realtime subscription failed:',
+          status
+        );
+      }
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 };
 
 // ========================================
@@ -190,7 +245,9 @@ export const fetchAllAdminProducts = async () => {
 
     if (error) {
       console.error('[FLEURS] Failed to fetch admin products:', error);
-      throw new Error(`Unable to fetch admin products: ${error.message}`);
+      throw new Error(
+        `Unable to fetch admin products: ${error.message}`
+      );
     }
 
     return data || [];
@@ -335,7 +392,9 @@ export const createOrder = async (orderPayload, items) => {
 
   const paymentMethod = String(
     paymentInfo?.method || orderPayload?.payment_method || ''
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
 
   if (!['cash', 'gcash'].includes(paymentMethod)) {
     throw new Error('Please select Cash or GCash as the payment method.');
@@ -387,7 +446,9 @@ export const createOrder = async (orderPayload, items) => {
       );
     }
 
-    const paymentReference = orderPayload?.payment_reference || null;
+    const paymentReference =
+      orderPayload?.payment_reference || null;
+
     const controller = new AbortController();
     let timeoutId;
     let requestTimedOut = false;
@@ -433,11 +494,11 @@ export const createOrder = async (orderPayload, items) => {
         total_amount: Number(result.total_amount ?? totalAmount),
         payment_method: result.payment_method || paymentMethod,
         amount_paid: Number(result.amount_paid ?? amountPaid),
-        change_amount: Number(result.change_amount ?? changeAmount),
+        change_amount: Number(
+          result.change_amount ?? changeAmount
+        ),
         status: result.status || 'pending',
-        payment_status:
-          result.payment_status ||
-          (paymentMethod === 'cash' ? 'pending' : 'pending'),
+        payment_status: result.payment_status || 'pending',
       };
     } catch (err) {
       if (requestTimedOut) {
@@ -448,10 +509,15 @@ export const createOrder = async (orderPayload, items) => {
 
       console.error('[FLEURS] Order creation failed:', err);
 
-      if (/insufficient stock|inactive product/i.test(err?.message || '')) {
+      if (
+        /insufficient stock|inactive product/i.test(
+          err?.message || ''
+        )
+      ) {
         const stockError = new Error(
           'Sorry, one or more items in your cart just ran out of stock. Please check your cart quantities and try again.'
         );
+
         stockError.code = 'OUT_OF_STOCK';
         throw stockError;
       }
@@ -465,7 +531,10 @@ export const createOrder = async (orderPayload, items) => {
   }
 
   // Offline/demo fallback.
-  const orderNumber = `#${Math.floor(100000 + Math.random() * 900000)}`;
+  const orderNumber = `#${Math.floor(
+    100000 + Math.random() * 900000
+  )}`;
+
   const now = new Date().toISOString();
 
   const fallbackOrder = {
@@ -496,7 +565,9 @@ export const createOrder = async (orderPayload, items) => {
         item.product_name || item.name || 'Unnamed Product';
 
       return {
-        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `item-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 6)}`,
         product_id: item.product_id || item.id,
         product_name: productName,
         name: productName,
@@ -542,7 +613,8 @@ export const trackOrder = async (orderNumber) => {
 
   const match = getLocalOrders().find(
     (order) =>
-      String(order.order_number || '').replace(/\D/g, '') === cleanNumber
+      String(order.order_number || '').replace(/\D/g, '') ===
+      cleanNumber
   );
 
   if (!match) return null;
@@ -554,14 +626,17 @@ export const trackOrder = async (orderNumber) => {
     payment_method: match.payment_method,
     total_amount: match.total_amount,
     created_at: match.created_at,
-    order_items: (match.order_items || match.items || []).map((item) => ({
-      product_name: item.product_name || item.name || 'Unnamed Product',
-      quantity: item.quantity,
-      subtotal:
-        item.subtotal ??
-        item.line_total ??
-        (Number(item.unit_price ?? item.price) || 0) *
-          (Number(item.quantity) || 1),
-    })),
+    order_items: (match.order_items || match.items || []).map(
+      (item) => ({
+        product_name:
+          item.product_name || item.name || 'Unnamed Product',
+        quantity: item.quantity,
+        subtotal:
+          item.subtotal ??
+          item.line_total ??
+          (Number(item.unit_price ?? item.price) || 0) *
+            (Number(item.quantity) || 1),
+      })
+    ),
   };
 };
