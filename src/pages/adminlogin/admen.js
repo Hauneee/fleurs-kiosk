@@ -1552,13 +1552,18 @@
   function proofSection(o) {
     const raw = proofValue(o);
 
-    if (!raw) {
+      if (!raw) {
+      const kind = paymentKind(o);
+      const ref = first(o, PAY_REF_KEYS, "");
+
+      const message = kind === "gcash"
+        ? "GCash payment. It was verified online, so no proof photo is needed." +
+          (ref ? ` Reference: ${ref}` : "")
+        : "No proof photo was attached to this order.";
+
       return `<div class="detail-section">
         <h3>Proof photos</h3>
-        <div class="notice warning">
-          No proof photo was saved in this order.
-          Check the proof_photo_path column in Supabase.
-        </div>
+        <div class="notice info">${esc(message)}</div>
       </div>`;
     }
 
