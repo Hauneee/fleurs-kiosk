@@ -1,439 +1,232 @@
-import React, { useEffect, useRef, useState } from 'react';
+
+import React, { useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { FloralCorner } from '../components/Decorations';
-import { scrollToTop } from '../utils/scrollToTop';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { createOrder } from '../services/supabase';
+import { createOrder } from '../services/orders';
 import { formatPeso } from '../utils/formatPeso';
 import { getPaymentInfo } from '../utils/paymentInfo';
 
-const PAY_REF_KEY = 'fleurs_pay_ref';
-const IDEMPOTENCY_KEY = 'fleurs_checkout_idempotency_key';
-const MAX_ITEMS = 10;
-
-const COLORS = {
-  pink: '#E879A5',
-  lightPink: '#F8C9DA',
-  blush: '#FCE7EF',
-  darkPink: '#C2255C',
-  wine: '#9C1A47',
-  darkText: '#3F1424',
-  mutedText: '#684854',
-  white: '#FFFFFF',
-};
-
-const getOrCreateIdempotencyKey = () => {
-  let key = sessionStorage.getItem(IDEMPOTENCY_KEY);
-
-  if (!key) {
-    if (!globalThis.crypto?.randomUUID) {
-      throw new Error(
-        'Secure checkout is unavailable in this browser. Please use an updated browser and try again.'
-      );
-    }
-
-    key = globalThis.crypto.randomUUID();
-    sessionStorage.setItem(IDEMPOTENCY_KEY, key);
-  }
-
-  return key;
-};
-
 export const PaymentConfirmationPage = ({
-  cart,
+  cart = [],
   customer,
   totalAmount,
   onBack,
-  onOrderSuccess,
+  onOrderSuccess
 }) => {
-  const isCash = getPaymentInfo().method === 'cash';
-  const paidRef = sessionStorage.getItem(PAY_REF_KEY) || '';
-  const canSave = isCash || Boolean(paidRef);
+  const paymentInfo = getPaymentInfo();
+  const isCash = paymentInfo.method === 'cash';
+  const cashReceived = Number(paymentInfo.cashReceived) || 0;
+  const amount = Number(totalAmount) || 0;
+  const change = Math.max(0, cashReceived - amount);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [cashReceived, setCashReceived] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const submittingRef = useRef(false);
+  const paidRef =
+    typeof window !== 'undefined'
+      ? sessionStorage.getItem('fleurs_pay_ref')
+      : null;
 
-  const itemCount = cart.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.quantity) || 0),
-    0
-  );
-
-  const exceedsItemLimit = itemCount > MAX_ITEMS;
-  const isCartEmpty = itemCount === 0;
-
-  const total = Number(totalAmount);
-  const cashAmount = Number(cashReceived);
-
-  const validCash =
-    cashReceived.trim() !== '' &&
-    Number.isFinite(cashAmount) &&
-    cashAmount >= total &&
-    cashAmount >= 0;
-
-  const changeAmount = validCash ? cashAmount - total : 0;
-
-  useEffect(() => {
-    scrollToTop();
-  }, []);
+  const canSave = isCash
+    ? amount > 0 && cashReceived >= amount
+    : Boolean(paidRef);
 
   const handleConfirm = async () => {
-    if (submittingRef.current) return;
-
-    if (isCartEmpty) {
-      setErrorMessage(
-        'Your cart is empty. Please add items before confirming your order.'
-      );
-      return;
-    }
-
-    if (exceedsItemLimit) {
-      setErrorMessage(
-        `Your order contains ${itemCount} items. The maximum allowed is ${MAX_ITEMS} items per order. Please return to your cart and reduce the quantity.`
-      );
-      return;
-    }
+    if (loading) return;
 
     if (!canSave) {
-      setErrorMessage(
-        'We could not find a confirmed payment. Please go back and try again.'
+      setError(
+        isCash
+          ? 'Please return to Payment and enter enough cash.'
+          : 'Please complete and verify the GCash payment first.'
       );
       return;
     }
 
-    if (isCash && !validCash) {
-      setErrorMessage(
-        `Please enter a cash amount equal to or greater than ${formatPeso(total)}.`
-      );
-      return;
-    }
-
-    submittingRef.current = true;
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    let completedOrder;
+    setLoading(true);
+    setError('');
 
     try {
-      const idempotencyKey = getOrCreateIdempotencyKey();
-
-      completedOrder = await createOrder(
-        {
-          total_amount: total,
-          customer,
-          payment_reference: isCash ? 'CASH' : paidRef,
-          idempotency_key: idempotencyKey,
-        },
-        cart
-      );
-
-      if (!completedOrder?.order_number) {
-        throw new Error(
-          'The server did not return a valid order confirmation.'
-        );
-      }
-    } catch (err) {
-      console.error('Order confirmation failed:', err);
-
-      setErrorMessage(
-        err?.message ||
-          'Unable to connect to the server. Please check the connection and try again.'
-      );
-
-      submittingRef.current = false;
-      setIsSubmitting(false);
-      return;
-    }
-
-    try {
-      onOrderSuccess({
-        ...completedOrder,
-        payment_method: isCash ? 'Cash' : 'GCash',
-        amount_paid: isCash ? cashAmount : total,
-        change_amount: isCash ? changeAmount : 0,
+      const order = await createOrder({
+        cart,
+        customer,
+        totalAmount: amount,
+        amount_paid: isCash ? cashReceived : amount,
+        change_amount: isCash ? change : 0,
+        payment_method: isCash ? 'cash' : 'gcash',
+        payment_reference: isCash ? null : paidRef
       });
+
+      if (!order) {
+        throw new Error('Unable to save the order. Please try again.');
+      }
+
+      onOrderSuccess?.(order);
     } catch (err) {
-      console.error(
-        'Order was created, but the confirmation callback failed:',
-        err
+      console.error('Order save failed:', err);
+      setError(
+        err?.message || 'Unable to save the order. Please try again.'
       );
-
-      setErrorMessage(
-        'Your order may already be saved. Please do not submit a new order. Contact staff to verify your order number: ' +
-          completedOrder.order_number
-      );
-
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    sessionStorage.removeItem(PAY_REF_KEY);
-    sessionStorage.removeItem(IDEMPOTENCY_KEY);
   };
 
   return (
     <div
       style={{
         flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
         minHeight: '100vh',
-        position: 'relative',
-        paddingBottom: '72px',
-        background: '#FFFAFC',
+        paddingBottom: 40,
+        background: '#FFF8F8',
+        color: '#684854',
+        position: 'relative'
       }}
     >
       <FloralCorner position="top-left" />
       <FloralCorner position="top-right" />
 
       <Header
-        title="PAYMENT CONFIRMATION"
-        onBack={isSubmitting || paidRef ? undefined : onBack}
+        title="Confirm Payment"
+        onBack={onBack}
         showCart={false}
         variant="light"
       />
 
       <main
         style={{
-          flex: 1,
           width: '100%',
-          maxWidth: '820px',
-          boxSizing: 'border-box',
+          maxWidth: 680,
           margin: '0 auto',
-          padding: '8px 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          zIndex: 10,
+          padding: '20px',
+          boxSizing: 'border-box',
+          position: 'relative',
+          zIndex: 1
         }}
       >
-        {errorMessage && (
-          <ErrorMessage
-            message={errorMessage}
-            onRetry={handleConfirm}
-            actionLabel="TRY AGAIN"
-          />
-        )}
-
-        <div
+        <section
           className="stitch-panel"
           style={{
-            boxSizing: 'border-box',
-            width: '100%',
-            padding: 'clamp(24px, 5vw, 40px) clamp(16px, 4vw, 36px)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '22px',
-            textAlign: 'center',
-            background: COLORS.white,
-            border: '1px solid #F8C9DA',
-            borderRadius: '24px',
-            boxShadow: '0 10px 30px rgba(194, 37, 92, 0.08)',
+            background: '#FFFFFF',
+            border: '1px solid #F0D5DE',
+            borderRadius: 24,
+            padding: 'clamp(20px, 4vw, 32px)',
+            boxShadow: '0 12px 32px rgba(155, 65, 97, 0.12)'
           }}
         >
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: 'var(--font-serif)',
-              fontSize: 'clamp(1.5rem, 5vw, 2.2rem)',
-              fontWeight: 800,
-              color: COLORS.darkText,
-              letterSpacing: '0.04em',
-            }}
-          >
-            {isCash ? 'CASH PAYMENT' : 'PAYMENT CONFIRMATION'}
+          <h2 style={{ marginTop: 0, textAlign: 'center' }}>
+            Payment Summary
           </h2>
-
-         {!isCash && (
-  <p
-    style={{
-      margin: 0,
-      fontSize: 'clamp(1rem, 3vw, 1.2rem)',
-      fontWeight: 700,
-      color: COLORS.mutedText,
-      lineHeight: 1.5,
-      maxWidth: '620px',
-    }}
-  >
-    {paidRef
-      ? 'Payment received! Please confirm your order.'
-      : 'We could not find a confirmed payment. Please go back and try again.'}
-  </p>
-)}
 
           <div
             style={{
-              boxSizing: 'border-box',
-              maxWidth: '100%',
-              background: COLORS.blush,
-              border: `2px dashed ${COLORS.pink}`,
-              borderRadius: '18px',
-              padding: '14px clamp(16px, 5vw, 28px)',
+              padding: 18,
+              background: '#FFF1F5',
+              borderRadius: 16,
+              marginBottom: 16
             }}
           >
-            <div
-              style={{
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                color: COLORS.wine,
-                letterSpacing: '0.03em',
-              }}
-            >
-              {itemCount} {itemCount === 1 ? 'ITEM' : 'ITEMS'} ·{' '}
-              {isCash ? 'AMOUNT TO PAY' : 'AMOUNT PAID'}
-            </div>
+            <p style={{ margin: '0 0 8px', fontWeight: 700 }}>
+              Payment Method
+            </p>
+            <p style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+              {isCash ? 'Cash' : 'GCash'}
+            </p>
+          </div>
 
-            <div
+          <div
+            style={{
+              padding: 18,
+              border: '1px solid #F0D5DE',
+              borderRadius: 16,
+              marginBottom: 16
+            }}
+          >
+            <p style={{ margin: '0 0 8px' }}>Total Amount</p>
+            <p
               style={{
-                fontFamily: 'var(--font-serif)',
-                fontSize: 'clamp(1.7rem, 6vw, 2.2rem)',
+                margin: 0,
+                fontSize: '2rem',
                 fontWeight: 800,
-                color: COLORS.darkText,
-                overflowWrap: 'anywhere',
+                overflowWrap: 'anywhere'
               }}
             >
-              {formatPeso(total)}
-            </div>
+              {formatPeso(amount)}
+            </p>
           </div>
 
           {isCash && (
             <div
               style={{
-                width: '100%',
-                maxWidth: '420px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-                textAlign: 'left',
+                padding: 18,
+                background: '#EAF8EE',
+                border: '1px solid #B7E2C1',
+                borderRadius: 16,
+                marginBottom: 16,
+                color: '#246B3B'
               }}
             >
-              <label
-                htmlFor="cash-received"
-                style={{
-                  fontWeight: 800,
-                  color: COLORS.darkText,
-                }}
-              >
-                Cash amount received (₱)
-              </label>
+              <p style={{ margin: '0 0 8px', fontWeight: 700 }}>
+                Cash Received
+              </p>
+              <p style={{ margin: '0 0 16px', fontSize: '1.4rem', fontWeight: 800 }}>
+                {formatPeso(cashReceived)}
+              </p>
 
-              <input
-                id="cash-received"
-                type="number"
-                min={total}
-                step="0.01"
-                inputMode="decimal"
-                placeholder="Enter cash amount"
-                value={cashReceived}
-                onChange={(event) => {
-                  setCashReceived(event.target.value);
-                  setErrorMessage(null);
-                }}
-                disabled={isSubmitting}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  padding: '14px',
-                  border: '2px solid #F8C9DA',
-                  borderRadius: '12px',
-                  fontSize: '1.1rem',
-                }}
-              />
-
-              <div
-                style={{
-                  padding: '12px',
-                  borderRadius: '12px',
-                  background: COLORS.blush,
-                  color: COLORS.wine,
-                  fontWeight: 800,
-                }}
-              >
-                Sukli: {formatPeso(changeAmount)}
-              </div>
-
-              {cashReceived !== '' && !validCash && (
-                <p
-                  role="alert"
-                  style={{
-                    margin: 0,
-                    color: COLORS.darkPink,
-                    fontWeight: 700,
-                  }}
-                >
-                  Enter at least {formatPeso(total)}.
-                </p>
-              )}
+              <p style={{ margin: '0 0 8px', fontWeight: 700 }}>
+                Sukli
+              </p>
+              <p style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>
+                {formatPeso(change)}
+              </p>
             </div>
           )}
 
-          {exceedsItemLimit && (
-            <p
-              role="alert"
+          {!isCash && (
+            <div
               style={{
-                margin: 0,
-                color: COLORS.darkPink,
-                fontWeight: 700,
-                lineHeight: 1.5,
+                padding: 16,
+                background: '#EAF8EE',
+                border: '1px solid #B7E2C1',
+                borderRadius: 16,
+                color: '#246B3B',
+                marginBottom: 16
               }}
             >
-              Your cart exceeds the {MAX_ITEMS}-item limit. Please return to
-              your cart and reduce the quantity before confirming.
-            </p>
+              GCash payment verified.
+            </div>
           )}
 
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '18px',
-            }}
-          >
-            {isSubmitting && (
-              <Loader2
-                size={44}
-                className="animate-spin"
-                color={COLORS.darkPink}
-                aria-label="Processing order"
-              />
-            )}
+          {error && (
+            <div style={{ marginBottom: 16 }}>
+              <ErrorMessage message={error} />
+            </div>
+          )}
 
-            {canSave && (
-              <Button
-                variant="primary"
-                size="xl"
-                onClick={handleConfirm}
-                disabled={
-                  isSubmitting ||
-                  isCartEmpty ||
-                  exceedsItemLimit ||
-                  (isCash && !validCash)
-                }
-              >
-                {isSubmitting
-                  ? 'PROCESSING ORDER...'
-                  : 'CONFIRM ORDER'}
-              </Button>
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Button
+              variant="accent"
+              size="xl"
+              className="checkout-btn-full"
+              onClick={handleConfirm}
+              disabled={!canSave || loading}
+            >
+              {loading ? 'SAVING ORDER...' : 'SAVE AND CONTINUE'}
+            </Button>
 
-            {!canSave && (
-              <Button
-                variant="primary"
-                size="xl"
-                onClick={onBack}
-                icon={<ArrowLeft size={24} />}
-              >
-                BACK TO PAYMENT
-              </Button>
-            )}
+            <Button
+              variant="secondary"
+              size="xl"
+              className="checkout-btn-full"
+              onClick={onBack}
+              disabled={loading}
+            >
+              BACK TO PAYMENT
+            </Button>
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );

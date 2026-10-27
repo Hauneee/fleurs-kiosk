@@ -546,6 +546,7 @@ export default function App() {
 
 {currentPage === 'proof' && (
   <PhotoProofPage
+    order={confirmedOrder}
     onDone={(url) => {
       setProofUrl(url || '');
       setCurrentPage('confirmation');
