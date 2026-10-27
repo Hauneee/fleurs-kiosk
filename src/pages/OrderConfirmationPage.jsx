@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  CheckCircle2,
   RotateCcw,
   SearchCheck,
   Download,
@@ -65,7 +64,7 @@ const loadReceiptLogo = () =>
     logo.onload = () => resolve(logo);
     logo.onerror = () =>
       reject(
-        new Error("Could not load public/logo.jpg Please check the logo filename.")
+        new Error("Could not load public/logo.jpg. Make sure the file is named logo.jpg and is inside the public folder.")
       );
     logo.src = `${import.meta.env.BASE_URL}logo.jpg`;
   });
@@ -208,9 +207,9 @@ const drawFullReceipt = async (order) => {
       };
 
       // Draw the actual logo, cropping the empty margins from the square image.
-      // The logo artwork itself sits in the middle of public/logo.jpg
+      // Crop the large empty margins around the artwork in public/logo.jpg.
       const logoSourceX = logo.naturalWidth * 0.06;
-      const logoSourceY = logo.naturalHeight * 0.34;
+      const logoSourceY = logo.naturalHeight * 0.36;
       const logoSourceWidth = logo.naturalWidth * 0.88;
       const logoSourceHeight = logo.naturalHeight * 0.36;
       const logoWidth = 680;
@@ -688,27 +687,22 @@ export const OrderConfirmationPage = ({
             textAlign: 'center',
           }}
         >
-          <div
-            className="fl-done__check"
+          <img
+            src={`${import.meta.env.BASE_URL}logo.jpg`}
+            alt="Blossom’s Craft logo"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
             style={{
+              display: 'block',
+              width: 'min(100%, 340px)',
+              height: '128px',
+              objectFit: 'cover',
+              objectPosition: 'center 55%',
+              borderRadius: '0',
               margin: '0 auto 16px',
-              color: COLORS.darkPink,
             }}
-          >
-            <CheckCircle2 size={52} strokeWidth={2.2} />
-          </div>
-
-          <p
-            style={{
-              color: COLORS.darkPink,
-              fontWeight: 800,
-              letterSpacing: '2px',
-              fontSize: '0.82rem',
-              marginBottom: '8px',
-            }}
-          >
-            FLEURS BY BLOSSOMS CRAFT
-          </p>
+          />
 
           <h1 className="fl-done__title">
             Your order is placed!
