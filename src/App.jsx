@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
@@ -22,6 +23,9 @@ import './styles/kiosk.css';
 import './styles/checkout.css';
 import './styles/track.css';
 
+const MAX_ITEMS = 10;
+const CART_STORAGE_KEY = 'fleurs_kiosk_cart';
+
 const EMPTY_CUSTOMER = {
   name: '',
   email: '',
@@ -39,13 +43,22 @@ const CHECKOUT_PAGES = [
   'payment-confirm'
 ];
 
+const getTotalItemCount = (items) =>
+  items.reduce(
+    (sum, item) =>
+      sum + Math.max(0, Number(item.quantity) || 0),
+    0
+  );
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
 
   const [cart, setCart] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('fleurs_kiosk_cart');
-      return saved ? JSON.parse(saved) : [];
+      const saved = sessionStorage.getItem(CART_STORAGE_KEY);
+      const parsed = saved ? JSON.parse(saved) : [];
+
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -66,11 +79,15 @@ export default function App() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showFullTerms, setShowFullTerms] = useState(false);
 
-  // Save the cart for the current session.
+  const showToast = (message) => {
+    setToastMessage(message);
+    setToastVisible(true);
+  };
+
   useEffect(() => {
     try {
       sessionStorage.setItem(
-        'fleurs_kiosk_cart',
+        CART_STORAGE_KEY,
         JSON.stringify(cart)
       );
     } catch (e) {
@@ -78,93 +95,156 @@ export default function App() {
     }
   }, [cart]);
 
-  // Check the Supabase connection.
   useEffect(() => {
     checkSupabaseConnection().then(setConnStatus);
   }, []);
 
-  // Return to the cart if it becomes empty during checkout.
-  useEffect(() => {
-    if (cart.length === 0 && CHECKOUT_PAGES.includes(currentPage)) {
-      setCurrentPage('cart');
-    }
-  }, [cart, currentPage]);
-
-  const cartCount = cart.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
+  const cartCount = getTotalItemCount(cart);
 
   const cartTotal =
     Math.round(
       cart.reduce(
         (sum, item) =>
-          sum + Number(item.price) * item.quantity,
+          sum +
+          (Number(item.price) || 0) *
+            (Number(item.quantity) || 0),
         0
       ) * 100
     ) / 100;
 
-  // Add a product to the cart.
+  // Add products without exceeding 10 total items.
   const handleAddToCart = (product, quantity = 1) => {
-    setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex(
-        (item) => item.id === product.id
+    const requestedQuantity = Number(quantity);
+
+    if (
+      !product?.id ||
+      !Number.isInteger(requestedQuantity) ||
+      requestedQuantity < 1
+    ) {
+      showToast('Invalid product or quantity.');
+      return;
+    }
+
+    if (cartCount + requestedQuantity > MAX_ITEMS) {
+      showToast(
+        `Maximum of ${MAX_ITEMS} items per order only.`
       );
+      return;
+    }
 
-      if (existingIndex > -1) {
-        const updated = [...prevCart];
+    const existingIndex = cart.findIndex(
+      (item) => item.id === product.id
+    );
 
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: updated[existingIndex].quantity + quantity
-        };
+    let updatedCart;
 
-        return updated;
-      }
-
-      return [
-        ...prevCart,
+    if (existingIndex !== -1) {
+      updatedCart = cart.map((item, index) =>
+        index === existingIndex
+          ? {
+              ...item,
+              quantity:
+                (Number(item.quantity) || 0) +
+                requestedQuantity
+            }
+          : item
+      );
+    } else {
+      updatedCart = [
+        ...cart,
         {
           id: product.id,
           product_id: product.id,
           name: product.name,
           category: product.category,
           price: product.price,
-          quantity,
+          quantity: requestedQuantity,
           image_url: product.image_url
         }
       ];
-    });
+    }
 
-    setToastMessage(`${product.name} added to cart!`);
-    setToastVisible(true);
+    setCart(updatedCart);
+    showToast(`${product.name} added to cart!`);
   };
 
-  // Update the quantity of a cart item.
+  // Update quantity without exceeding the total cart limit.
   const handleUpdateQuantity = (productId, newQuantity) => {
-    if (newQuantity <= 0) {
+    const requestedQuantity = Number(newQuantity);
+
+    if (!Number.isInteger(requestedQuantity)) {
+      showToast('Invalid quantity.');
+      return;
+    }
+
+    if (requestedQuantity < 1) {
       handleRemoveItem(productId);
       return;
     }
 
-    setCart((prevCart) =>
-      prevCart.map((item) =>
+    const targetItem = cart.find(
+      (item) => item.id === productId
+    );
+
+    if (!targetItem) return;
+
+    const otherItemsCount = cart
+      .filter((item) => item.id !== productId)
+      .reduce(
+        (sum, item) =>
+          sum + Math.max(0, Number(item.quantity) || 0),
+        0
+      );
+
+    if (otherItemsCount + requestedQuantity > MAX_ITEMS) {
+      showToast(
+        `Maximum of ${MAX_ITEMS} items per order only.`
+      );
+      return;
+    }
+
+    setCart(
+      cart.map((item) =>
         item.id === productId
-          ? { ...item, quantity: newQuantity }
+          ? { ...item, quantity: requestedQuantity }
           : item
       )
     );
   };
 
-  // Remove a product from the cart.
   const handleRemoveItem = (productId) => {
     setCart((prevCart) =>
       prevCart.filter((item) => item.id !== productId)
     );
   };
 
-  // Step 1: Customer submits their information.
+  // Validate the cart before entering checkout.
+  const handleProceedToCheckout = () => {
+    if (cartCount === 0) {
+      showToast('Please add an item to your cart.');
+      return;
+    }
+
+    if (cartCount > MAX_ITEMS) {
+      showToast(
+        `Your cart has ${cartCount} items. The maximum is ${MAX_ITEMS}.`
+      );
+      return;
+    }
+
+    setPendingInfo(null);
+    setCurrentPage('customer-info');
+  };
+
   const handleCustomerInfoSubmit = (info) => {
+    if (cartCount === 0 || cartCount > MAX_ITEMS) {
+      showToast(
+        `Your order must contain between 1 and ${MAX_ITEMS} items.`
+      );
+      setCurrentPage('cart');
+      return;
+    }
+
     setPendingInfo({
       ...info,
       section: info.section || 'N/A'
@@ -174,9 +254,19 @@ export default function App() {
     setShowFullTerms(false);
   };
 
-  // Step 2: Proceed only after the customer accepts the terms.
   const handleConfirmOrder = () => {
     if (!pendingInfo || !acceptedTerms) return;
+
+    if (cartCount === 0 || cartCount > MAX_ITEMS) {
+      setPendingInfo(null);
+      setAcceptedTerms(false);
+      setCurrentPage('cart');
+
+      showToast(
+        `Your order must contain between 1 and ${MAX_ITEMS} items.`
+      );
+      return;
+    }
 
     setCustomerInfo(pendingInfo);
     setPendingInfo(null);
@@ -184,7 +274,6 @@ export default function App() {
     setCurrentPage('payment');
   };
 
-  // Handle a successfully created order.
   const handleOrderSuccess = (orderData) => {
     if (supabase && orderData?.order_number) {
       supabase.functions
@@ -203,13 +292,12 @@ export default function App() {
     setPendingInfo(null);
     setAcceptedTerms(false);
 
-    sessionStorage.removeItem('fleurs_kiosk_cart');
+    sessionStorage.removeItem(CART_STORAGE_KEY);
 
     setProofUrl('');
     setCurrentPage('proof');
   };
 
-  // Start a new order.
   const handleNewOrder = () => {
     setCart([]);
     setCustomerInfo(EMPTY_CUSTOMER);
@@ -219,7 +307,7 @@ export default function App() {
     setShowFullTerms(false);
     setProofUrl('');
 
-    sessionStorage.removeItem('fleurs_kiosk_cart');
+    sessionStorage.removeItem(CART_STORAGE_KEY);
     setCurrentPage('menu');
   };
 
@@ -229,7 +317,6 @@ export default function App() {
 
   return (
     <div className="kiosk-app-container">
-      {/* Development-only Supabase status button */}
       {import.meta.env.DEV && (
         <div
           style={{
@@ -273,7 +360,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Home page */}
       {currentPage === 'home' && (
         <HomePage
           onStartOrder={() => setCurrentPage('menu')}
@@ -284,7 +370,6 @@ export default function App() {
         />
       )}
 
-      {/* Menu page */}
       {currentPage === 'menu' && (
         <MenuPage
           onBack={() => setCurrentPage('home')}
@@ -296,7 +381,6 @@ export default function App() {
         />
       )}
 
-      {/* Product categories */}
       {currentPage === 'bouquet' && (
         <BouquetPage
           onBack={() => setCurrentPage('menu')}
@@ -324,18 +408,16 @@ export default function App() {
         />
       )}
 
-      {/* Cart */}
       {currentPage === 'cart' && (
         <CartPage
           cart={cart}
           onUpdateQuantity={handleUpdateQuantity}
           onRemoveItem={handleRemoveItem}
           onContinueShopping={() => setCurrentPage('menu')}
-          onProceed={() => setCurrentPage('customer-info')}
+          onProceed={handleProceedToCheckout}
         />
       )}
 
-      {/* Customer information */}
       {currentPage === 'customer-info' && (
         <CustomerInfoPage
           initialValues={customerInfo}
@@ -344,17 +426,25 @@ export default function App() {
         />
       )}
 
-      {/* Payment */}
       {currentPage === 'payment' && (
         <PaymentPage
           cart={cart}
           totalAmount={cartTotal}
           onBack={() => setCurrentPage('customer-info')}
-          onPaid={() => setCurrentPage('payment-confirm')}
+          onPaid={() => {
+            if (cartCount === 0 || cartCount > MAX_ITEMS) {
+              showToast(
+                `Your order must contain between 1 and ${MAX_ITEMS} items.`
+              );
+              setCurrentPage('cart');
+              return;
+            }
+
+            setCurrentPage('payment-confirm');
+          }}
         />
       )}
 
-      {/* Payment confirmation */}
       {currentPage === 'payment-confirm' && (
         <PaymentConfirmationPage
           cart={cart}
@@ -365,7 +455,6 @@ export default function App() {
         />
       )}
 
-      {/* Photo proof */}
       {currentPage === 'proof' && (
         <PhotoProofPage
           order={confirmedOrder}
@@ -376,7 +465,6 @@ export default function App() {
         />
       )}
 
-      {/* Order confirmation */}
       {currentPage === 'confirmation' && (
         <OrderConfirmationPage
           order={confirmedOrder}
@@ -391,7 +479,6 @@ export default function App() {
         />
       )}
 
-      {/* Track order */}
       {currentPage === 'track' && (
         <TrackOrderPage
           initialOrderNumber={trackPrefill}
@@ -399,7 +486,6 @@ export default function App() {
         />
       )}
 
-      {/* Confirm order and accept terms modal */}
       {currentPage === 'customer-info' && pendingInfo && (
         <div
           className="modal-overlay"
@@ -513,7 +599,6 @@ export default function App() {
                   Review your order before proceeding to payment.
                 </p>
 
-                {/* Order items and total */}
                 <div
                   style={{
                     background: '#ffffff',
@@ -565,7 +650,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Customer details */}
                 <div
                   style={{
                     fontSize: '1rem',
@@ -581,7 +665,6 @@ export default function App() {
                   <div>Phone: {pendingInfo.phone}</div>
                 </div>
 
-                {/* View full terms */}
                 <button
                   type="button"
                   onClick={() => setShowFullTerms(true)}
@@ -599,7 +682,6 @@ export default function App() {
                   READ FULL TERMS & CONDITIONS
                 </button>
 
-                {/* Accept terms checkbox */}
                 <label
                   style={{
                     display: 'flex',
@@ -634,7 +716,6 @@ export default function App() {
                   </span>
                 </label>
 
-                {/* Buttons: confirm first, cancel second */}
                 <div
                   style={{
                     display: 'flex',
@@ -676,14 +757,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Toast notifications */}
       <Toast
         message={toastMessage}
         isVisible={toastVisible}
         onClose={() => setToastVisible(false)}
       />
 
-      {/* Supabase configuration */}
       <SupabaseConfigModal
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -11,6 +12,7 @@ import { getPaymentInfo } from '../utils/paymentInfo';
 
 const PAY_REF_KEY = 'fleurs_pay_ref';
 const IDEMPOTENCY_KEY = 'fleurs_checkout_idempotency_key';
+const MAX_ITEMS = 10;
 
 const COLORS = {
   pink: '#E879A5',
@@ -56,16 +58,39 @@ export const PaymentConfirmationPage = ({
 
   const submittingRef = useRef(false);
 
+  const itemCount = cart.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.quantity) || 0),
+    0
+  );
+
+  const exceedsItemLimit = itemCount > MAX_ITEMS;
+  const isCartEmpty = itemCount === 0;
+
   useEffect(() => {
     scrollToTop();
   }, []);
 
   const handleConfirm = async () => {
-    if (
-      submittingRef.current ||
-      cart.length === 0 ||
-      !canSave
-    ) {
+    if (submittingRef.current) {
+      return;
+    }
+
+    if (isCartEmpty) {
+      setErrorMessage('Your cart is empty. Please add items before confirming your order.');
+      return;
+    }
+
+    if (exceedsItemLimit) {
+      setErrorMessage(
+        `Your order contains ${itemCount} items. The maximum allowed is ${MAX_ITEMS} items per order. Please return to your cart and reduce the quantity.`
+      );
+      return;
+    }
+
+    if (!canSave) {
+      setErrorMessage(
+        'We could not find a confirmed payment. Please go back and try again.'
+      );
       return;
     }
 
@@ -121,8 +146,7 @@ export const PaymentConfirmationPage = ({
           completedOrder.order_number
       );
 
-      // Keep the idempotency key to protect against duplicate orders.
-      // Keep the submit lock active because the order already exists.
+      // Keep the idempotency key and submit lock to help prevent duplicates.
       return;
     }
 
@@ -131,11 +155,6 @@ export const PaymentConfirmationPage = ({
     sessionStorage.removeItem(PAY_REF_KEY);
     sessionStorage.removeItem(IDEMPOTENCY_KEY);
   };
-
-  const itemCount = cart.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
 
   return (
     <div
@@ -263,6 +282,21 @@ export const PaymentConfirmationPage = ({
             </div>
           </div>
 
+          {exceedsItemLimit && (
+            <p
+              role="alert"
+              style={{
+                margin: 0,
+                color: COLORS.darkPink,
+                fontWeight: 700,
+                lineHeight: 1.5,
+              }}
+            >
+              Your cart exceeds the {MAX_ITEMS}-item limit. Please return to
+              your cart and reduce the quantity before confirming.
+            </p>
+          )}
+
           <div
             style={{
               width: '100%',
@@ -286,7 +320,11 @@ export const PaymentConfirmationPage = ({
                 variant="primary"
                 size="xl"
                 onClick={handleConfirm}
-                disabled={isSubmitting || cart.length === 0}
+                disabled={
+                  isSubmitting ||
+                  isCartEmpty ||
+                  exceedsItemLimit
+                }
               >
                 {isSubmitting
                   ? 'PROCESSING ORDER...'
