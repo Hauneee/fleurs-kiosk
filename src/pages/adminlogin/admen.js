@@ -146,7 +146,7 @@
 
   const CHANGE_KEYS = [
     "change_amount", "change", "change_due", "exchange",
-    "exchange_amount", "sukli", "cash_change",
+    "exchange_amount", "Exchange", "cash_change",
     "change_given", "change_returned"
   ];
 
