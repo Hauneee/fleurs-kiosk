@@ -450,6 +450,17 @@ export const createOrder = async (orderPayload, items) => {
 
       console.error('[FLEURS DEBUG] Order creation failed:', err);
 
+      // Friendly message when the database rejects the order because
+      // an item sold out (or was deactivated) before checkout finished.
+      if (/insufficient stock|inactive product/i.test(err?.message || '')) {
+        const stockError = new Error(
+          'Sorry, one or more items in your cart just ran out of stock. ' +
+          'Please go back to your cart, check the quantities, and try again.'
+        );
+        stockError.code = 'OUT_OF_STOCK';
+        throw stockError;
+      }
+
       throw new Error(
         `Unable to create order: ${
           err?.message || 'Please try again.'

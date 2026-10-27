@@ -696,3 +696,328 @@ tbody tr:hover { background: #fffafa; }
   .login-card { padding: 22px; }
   .card-head, .card-body { padding: 15px; }
 }
+
+/* Products & Inventory */
+.stock-number {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.stock-number.low {
+  color: #a37a0e;
+}
+
+.stock-number.out {
+  color: var(--red);
+}
+
+.inventory-actions {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.inventory-actions .btn {
+  white-space: nowrap;
+}
+
+.inventory-product {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inventory-product strong {
+  font-size: 12px;
+}
+
+.inventory-product span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .inventory-actions {
+    flex-wrap: wrap;
+  }
+}
+
+
+/* Products & Inventory */
+.inventory-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.inventory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+}
+
+.inventory-toolbar .search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.inventory-toolbar .filter {
+  flex: 0 1 180px;
+}
+
+.inventory-data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inventory-data-table th,
+.inventory-data-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e8e4e8);
+  vertical-align: middle;
+}
+
+.inventory-data-table th {
+  white-space: nowrap;
+}
+
+.inventory-update-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-stock-input {
+  width: 86px;
+  min-width: 70px;
+  padding: 9px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  background: var(--card, #fff);
+  color: inherit;
+}
+
+.inventory-badge {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inventory-badge.in {
+  background: #e7f6ec;
+  color: #217344;
+}
+
+.inventory-badge.low {
+  background: #fff2d8;
+  color: #8a5a00;
+}
+
+.inventory-badge.out {
+  background: #fde8e8;
+  color: #a52626;
+}
+
+@media (max-width: 900px) {
+  .inventory-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-data-table {
+    min-width: 780px;
+  }
+
+  #inventoryTable {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .inventory-summary {
+    gap: 10px;
+  }
+
+  .inventory-toolbar {
+    padding: 14px;
+  }
+}
+
+/* Inventory product pictures */
+.inventory-product-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.inventory-product-image {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #eee4e8;
+  background: #fff8fa;
+}
+
+.inventory-product-image.image-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b66b86;
+  font-size: 24px;
+  background: #fff0f5;
+}
+
+.inventory-product-info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.inventory-product-info strong {
+  display: block;
+}
+
+@media (max-width: 600px) {
+  .inventory-product-image {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+  }
+
+  .inventory-product-cell {
+    gap: 8px;
+    min-width: 160px;
+  }
+}
+
+/* Compact Products & Inventory table */
+.inventory-data-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.inventory-data-table th,
+.inventory-data-table td {
+  padding: 10px 8px;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.inventory-data-table th:nth-child(1) { width: 34%; }
+.inventory-data-table th:nth-child(2) { width: 13%; }
+.inventory-data-table th:nth-child(3) { width: 8%; }
+.inventory-data-table th:nth-child(4) { width: 9%; }
+.inventory-data-table th:nth-child(5) { width: 11%; }
+.inventory-data-table th:nth-child(6) { width: 25%; }
+
+/* Smaller product image and details */
+.inventory-product-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.inventory-product-image {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.inventory-product-info {
+  min-width: 0;
+}
+
+.inventory-product-info strong {
+  display: block;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* Hide long descriptions to save space */
+.inventory-product-info .muted {
+  display: none;
+}
+
+/* Product type labels */
+.product-type-badge {
+  display: inline-block;
+  padding: 5px 7px;
+  border-radius: 20px;
+  background: #fff0f5;
+  color: #a74368;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: normal;
+}
+
+/* Compact stock input and Save button */
+.inventory-update-form {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.inventory-stock-input {
+  box-sizing: border-box;
+  width: 55px;
+  min-width: 0;
+  padding: 7px 5px;
+  font-size: 12px;
+}
+
+.inventory-update-form button {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Prevent the table wrapper from forcing extra width */
+.table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 1100px) {
+  .inventory-data-table th,
+  .inventory-data-table td {
+    padding: 8px 5px;
+    font-size: 11px;
+  }
+
+  .inventory-data-table th:nth-child(1) { width: 31%; }
+  .inventory-data-table th:nth-child(2) { width: 14%; }
+  .inventory-data-table th:nth-child(3) { width: 8%; }
+  .inventory-data-table th:nth-child(4) { width: 9%; }
+  .inventory-data-table th:nth-child(5) { width: 11%; }
+  .inventory-data-table th:nth-child(6) { width: 27%; }
+}
+/* Capitalize first letter of each word in Category */
+/* Capitalize and bold Category text */
+#inventoryTable td,
+#inventoryTable .category {
+  text-transform: capitalize;
+ /* Bold and capitalize Category values only */
+#inventoryTable td.category {
+  text-transform: capitalize;
+  font-weight: 700;
+}
+}
+.inventory-data-table td .product-name {
+  font-size: 14px;
+  font-weight: 400;
+}

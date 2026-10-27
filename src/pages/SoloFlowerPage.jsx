@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from '../components/Header';
 import { ProductGrid } from '../components/ProductGrid';
 import { ProductModal } from '../components/ProductModal';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { fetchProducts } from '../services/supabase';
+import { getStockInfo } from '../utils/stock';
 import '../styles/shop.css';
 import '../styles/light.css';
 
@@ -23,23 +25,45 @@ export const SoloFlowerPage = ({
   const [error, setError] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
       const data = await fetchProducts('solo-flower');
-      setProducts(data);
+
+      setProducts(
+        (Array.isArray(data) ? data : []).map((product) => ({
+          ...product,
+          stockInfo: getStockInfo(product),
+        }))
+      );
     } catch (err) {
       console.error('Failed to load solo flower products:', err);
-      setError('Unable to load solo flowers from the database. Please try again.');
+      setError(
+        'Unable to load solo flowers from the database. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [loadProducts]);
+
+  const handleSelectProduct = (product) => {
+    const stockInfo = getStockInfo(product);
+
+    if (stockInfo.soldOut) {
+      if (onLimitReached) {
+        onLimitReached('This flower is currently out of stock.');
+      }
+      return;
+    }
+
+    setSelectedProduct(product);
+  };
 
   return (
     <div className="fl-shop fl-light">
@@ -62,7 +86,8 @@ export const SoloFlowerPage = ({
             <ProductGrid
               products={products}
               columns={3}
-              onSelectProduct={(product) => setSelectedProduct(product)}
+              onSelectProduct={handleSelectProduct}
+              maxQuantity={maxQuantity}
             />
           </div>
         )}

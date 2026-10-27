@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
@@ -24,6 +23,7 @@ import {
 } from './services/supabase';
 
 import { getPaymentInfo } from './utils/paymentInfo';
+import { getStockInfo, remainingToAdd } from './utils/stock';
 import { Database } from 'lucide-react';
 import { formatPeso } from './utils/formatPeso';
 
@@ -87,15 +87,11 @@ export default function App() {
       const productIndexes = new Map();
 
       parsed.forEach((item) => {
-        if (!item || item.id == null || remaining <= 0) {
-          return;
-        }
+        if (!item || item.id == null || remaining <= 0) return;
 
         const quantity = Number(item.quantity);
 
-        if (!Number.isInteger(quantity) || quantity < 1) {
-          return;
-        }
+        if (!Number.isInteger(quantity) || quantity < 1) return;
 
         const acceptedQuantity = Math.min(quantity, remaining);
         const existingIndex = productIndexes.get(String(item.id));
@@ -140,10 +136,10 @@ export default function App() {
   const [showFullTerms, setShowFullTerms] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
 
-  const showToast = (message) => {
+  const showToast = useCallback((message) => {
     setToastMessage(message);
     setToastVisible(true);
-  };
+  }, []);
 
   useEffect(() => {
     try {
@@ -163,9 +159,7 @@ export default function App() {
       .catch((error) => {
         console.warn('Supabase connection check failed', error);
 
-        if (active) {
-          setConnStatus({ connected: false });
-        }
+        if (active) setConnStatus({ connected: false });
       });
 
     return () => {
@@ -174,13 +168,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (
-      cart.length === 0 &&
-      CHECKOUT_PAGES.includes(currentPage)
-    ) {
+    if (cart.length === 0 && CHECKOUT_PAGES.includes(currentPage)) {
       setCurrentPage('cart');
     }
-  }, [cart, currentPage]);
+  }, [cart.length, currentPage]);
 
   const cartCount = getTotalItemCount(cart);
   const remainingSlots = Math.max(0, MAX_ITEMS - cartCount);
@@ -193,6 +184,148 @@ export default function App() {
         0
       ) * 100
     ) / 100;
+
+  // Verify inventory directly from Supabase.
+  // Do not use fetchProducts() because it may return demo products
+  // when the database request fails.
+  const refreshCartStock = useCallback(async () => {
+    if (cart.length === 0) {
+      return {
+        valid: true,
+        items: [],
+        verified: Boolean(supabase),
+      };
+    }
+
+    if (!supabase) {
+      return {
+        valid: true,
+        items: cart,
+        verified: false,
+      };
+    }
+
+    try {
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      if (!Array.isArray(products)) {
+        throw new Error('Invalid product inventory response.');
+      }
+
+      const productMap = new Map(
+        products.map((product) => [String(product.id), product])
+      );
+
+      const refreshedItems = cart.map((item) => {
+        const productId = item.product_id ?? item.id;
+        const latestProduct = productMap.get(String(productId));
+
+        if (!latestProduct) {
+          return {
+            ...item,
+            _stockUnavailable: true,
+          };
+        }
+
+        return {
+          ...item,
+          ...latestProduct,
+          id: item.id,
+          product_id: productId,
+          quantity: getQuantity(item),
+          _stockUnavailable: false,
+        };
+      });
+
+      const unavailable = refreshedItems.find(
+        (item) => item._stockUnavailable
+      );
+
+      if (unavailable) {
+        setCart((previousCart) =>
+          previousCart.map((item) => {
+            const refreshed = refreshedItems.find(
+              (fresh) => String(fresh.id) === String(item.id)
+            );
+
+            return refreshed || item;
+          })
+        );
+
+        return {
+          valid: false,
+          items: refreshedItems,
+          verified: true,
+          message: `${
+            unavailable.name || 'A product'
+          } is no longer available. Please remove it from your cart.`,
+        };
+      }
+
+      const invalidItem = refreshedItems.find((item) => {
+        const { qty } = getStockInfo(item);
+
+        return qty !== null && getQuantity(item) > qty;
+      });
+
+      // UPDATED: compare stock information too, not just product
+      // details and quantity, before deciding whether the cart changed.
+      setCart((previousCart) => {
+        const unchanged =
+          previousCart.length === refreshedItems.length &&
+          previousCart.every((item, index) => {
+            const fresh = refreshedItems[index];
+
+            return (
+              String(item.id) === String(fresh.id) &&
+              item.name === fresh.name &&
+              Number(item.price) === Number(fresh.price) &&
+              getQuantity(item) === getQuantity(fresh) &&
+              item._stockUnavailable === fresh._stockUnavailable &&
+              JSON.stringify(getStockInfo(item)) ===
+                JSON.stringify(getStockInfo(fresh))
+            );
+          });
+
+        return unchanged ? previousCart : refreshedItems;
+      });
+
+      if (invalidItem) {
+        const { qty } = getStockInfo(invalidItem);
+
+        return {
+          valid: false,
+          items: refreshedItems,
+          verified: true,
+          message:
+            qty === 0
+              ? `${invalidItem.name} is out of stock.`
+              : `Only ${qty} unit(s) of ${invalidItem.name} are available. Please update your cart.`,
+        };
+      }
+
+      return {
+        valid: true,
+        items: refreshedItems,
+        verified: true,
+      };
+    } catch (error) {
+      console.error('Live stock verification failed:', error);
+
+      return {
+        valid: false,
+        items: cart,
+        verified: false,
+        message:
+          'Unable to verify live stock. Check your connection and try again.',
+      };
+    }
+  }, [cart]);
 
   const handleAddToCart = (product, quantity = 1) => {
     const requestedQuantity = Number(quantity);
@@ -207,58 +340,87 @@ export default function App() {
       return false;
     }
 
-    const currentCount = getTotalItemCount(cart);
+    const existingItem = cart.find(
+      (item) => String(item.id) === String(product.id)
+    );
 
-    if (currentCount + requestedQuantity > MAX_ITEMS) {
+    const existingQuantity = existingItem
+      ? getQuantity(existingItem)
+      : 0;
+
+    const productForStock = {
+      ...(existingItem || {}),
+      ...product,
+    };
+
+    const stockInfo = getStockInfo(productForStock);
+
+    if (stockInfo.soldOut) {
+      showToast('Sorry, this product is out of stock.');
+      return false;
+    }
+
+    const remaining = remainingToAdd(
+      productForStock,
+      existingQuantity
+    );
+
+    if (requestedQuantity > remaining) {
+      showToast(
+        remaining <= 0
+          ? 'You already have the maximum available stock in your cart.'
+          : `Only ${remaining} more unit(s) can be added.`
+      );
+
+      return false;
+    }
+
+    if (cartCount + requestedQuantity > MAX_ITEMS) {
       showToast(MAX_ITEMS_MESSAGE);
       return false;
     }
 
-    setCart((previousCart) => {
-      const latestCount = getTotalItemCount(previousCart);
+    const existingIndex = cart.findIndex(
+      (item) => String(item.id) === String(product.id)
+    );
 
-      if (latestCount + requestedQuantity > MAX_ITEMS) {
-        return previousCart;
-      }
+    let nextCart;
 
-      const existingIndex = previousCart.findIndex(
-        (item) => String(item.id) === String(product.id)
+    if (existingIndex !== -1) {
+      nextCart = cart.map((item, index) =>
+        index === existingIndex
+          ? {
+              ...item,
+              ...productForStock,
+              quantity: getQuantity(item) + requestedQuantity,
+            }
+          : item
       );
-
-      if (existingIndex !== -1) {
-        return previousCart.map((item, index) =>
-          index === existingIndex
-            ? {
-                ...item,
-                quantity: getQuantity(item) + requestedQuantity,
-              }
-            : item
-        );
-      }
-
-      return [
-        ...previousCart,
+    } else {
+      nextCart = [
+        ...cart,
         {
+          ...productForStock,
           id: product.id,
-          product_id: product.id,
+          product_id: product.product_id ?? product.id,
           name: product.name,
           category: product.category,
           price: product.price,
-          quantity: requestedQuantity,
           image_url: product.image_url,
+          quantity: requestedQuantity,
         },
       ];
-    });
+    }
 
+    setCart(nextCart);
     showToast(`${product.name} added to cart!`);
     return true;
   };
 
-  // Add the selected product, then open Customer Information.
   const handleCheckoutNow = (product, quantity = 1) => {
-    const result = handleAddToCart(product, quantity);
+    const added = handleAddToCart(product, quantity);
 
-    if (result === false) return false;
+    if (!added) return false;
 
     setPendingInfo(null);
     setCurrentPage('customer-info');
@@ -281,11 +443,28 @@ export default function App() {
 
     if (targetIndex === -1) return;
 
+    const target = cart[targetIndex];
+    const stockInfo = getStockInfo(target);
+
+    if (stockInfo.soldOut) {
+      showToast('This product is out of stock.');
+      return;
+    }
+
+    const availableStock = remainingToAdd(target, 0);
+
+    if (requestedQuantity > availableStock) {
+      showToast(
+        stockInfo.qty !== null
+          ? `Only ${stockInfo.qty} unit(s) are available.`
+          : 'Invalid quantity.'
+      );
+      return;
+    }
+
     const otherItemsCount = cart.reduce(
-      (sum, item, index) => {
-        if (index === targetIndex) return sum;
-        return sum + getQuantity(item);
-      },
+      (sum, item, index) =>
+        index === targetIndex ? sum : sum + getQuantity(item),
       0
     );
 
@@ -294,31 +473,35 @@ export default function App() {
       return;
     }
 
-    if (getQuantity(cart[targetIndex]) === requestedQuantity) {
-      return;
-    }
-
     setCart((previousCart) => {
-      const latestTargetIndex = previousCart.findIndex(
+      const latestIndex = previousCart.findIndex(
         (item) => String(item.id) === String(productId)
       );
 
-      if (latestTargetIndex === -1) return previousCart;
+      if (latestIndex === -1) return previousCart;
 
-      const latestOtherItemsCount = previousCart.reduce(
-        (sum, item, index) => {
-          if (index === latestTargetIndex) return sum;
-          return sum + getQuantity(item);
-        },
+      const latestTarget = previousCart[latestIndex];
+      const latestStock = getStockInfo(latestTarget);
+
+      if (
+        latestStock.soldOut ||
+        requestedQuantity > remainingToAdd(latestTarget, 0)
+      ) {
+        return previousCart;
+      }
+
+      const latestOtherCount = previousCart.reduce(
+        (sum, item, index) =>
+          index === latestIndex ? sum : sum + getQuantity(item),
         0
       );
 
-      if (latestOtherItemsCount + requestedQuantity > MAX_ITEMS) {
+      if (latestOtherCount + requestedQuantity > MAX_ITEMS) {
         return previousCart;
       }
 
       return previousCart.map((item, index) =>
-        index === latestTargetIndex
+        index === latestIndex
           ? { ...item, quantity: requestedQuantity }
           : item
       );
@@ -333,7 +516,7 @@ export default function App() {
     );
   };
 
-  const handleProceedToCheckout = () => {
+  const handleProceedToCheckout = async () => {
     if (cartCount === 0) {
       showToast('Please add an item to your cart.');
       return;
@@ -341,6 +524,15 @@ export default function App() {
 
     if (cartCount > MAX_ITEMS) {
       showToast(MAX_ITEMS_MESSAGE);
+      return;
+    }
+
+    const result = await refreshCartStock();
+
+    if (!result.valid) {
+      showToast(
+        result.message || 'Please check your cart quantities.'
+      );
       return;
     }
 
@@ -381,7 +573,6 @@ export default function App() {
     setCurrentPage('payment');
   };
 
-  // Save order successfully, then go straight to Photo Proof.
   const handleOrderSuccess = (orderData) => {
     if (supabase && orderData?.order_number) {
       supabase.functions
@@ -411,7 +602,6 @@ export default function App() {
     setCurrentPage('proof');
   };
 
-  // Save the order directly from the Payment page.
   const handlePaymentComplete = async () => {
     if (isSavingOrder) return;
 
@@ -448,13 +638,36 @@ export default function App() {
     }
 
     if (!isCash && !paidRef) {
-      showToast('Please complete and verify the GCash payment first.');
+      showToast(
+        'Please complete and verify the GCash payment first.'
+      );
       return;
     }
 
     setIsSavingOrder(true);
 
     try {
+      const stockCheck = await refreshCartStock();
+
+      if (!stockCheck.valid) {
+        showToast(
+          stockCheck.message ||
+            'Stock changed. Please review your cart.'
+        );
+
+        setCurrentPage('cart');
+        return;
+      }
+
+      if (supabase && !stockCheck.verified) {
+        showToast(
+          'Live inventory could not be verified. Please try again.'
+        );
+
+        setCurrentPage('cart');
+        return;
+      }
+
       const idempotencyKey = getCheckoutKey();
 
       const order = await createOrder(
@@ -466,18 +679,19 @@ export default function App() {
           payment_reference: isCash ? null : paidRef,
           idempotency_key: idempotencyKey,
         },
-        cart
+        stockCheck.items
       );
 
       if (!order) {
-        throw new Error('Unable to save the order. Please try again.');
+        throw new Error(
+          'Unable to save the order. Please try again.'
+        );
       }
 
-      // Keep the full receipt data before handleOrderSuccess clears the cart.
       const completeOrder = {
         ...order,
         customer: { ...customerInfo },
-        items: cart.map((item) => ({
+        items: stockCheck.items.map((item) => ({
           ...item,
           quantity: getQuantity(item),
           line_total:
@@ -494,7 +708,8 @@ export default function App() {
       console.error('Order save failed:', error);
 
       showToast(
-        error?.message || 'Unable to save the order. Please try again.'
+        error?.message ||
+          'Unable to save the order. Please try again.'
       );
     } finally {
       setIsSavingOrder(false);
@@ -581,7 +796,9 @@ export default function App() {
       {currentPage === 'menu' && (
         <MenuPage
           onBack={() => setCurrentPage('home')}
-          onSelectCategory={(categoryId) => setCurrentPage(categoryId)}
+          onSelectCategory={(categoryId) =>
+            setCurrentPage(categoryId)
+          }
           onCart={() => setCurrentPage('cart')}
           cartCount={cartCount}
         />
@@ -641,7 +858,6 @@ export default function App() {
         />
       )}
 
-      {/* Single Payment page: Cash or GCash. */}
       {currentPage === 'payment' && (
         <PaymentPage
           cart={cart}
@@ -651,7 +867,6 @@ export default function App() {
         />
       )}
 
-      {/* Opens only after payment succeeds and the order is saved. */}
       {currentPage === 'proof' && (
         <PhotoProofPage
           order={confirmedOrder}
@@ -662,14 +877,15 @@ export default function App() {
         />
       )}
 
-      {/* Final order completion page after Photo Proof. */}
       {currentPage === 'confirmation' && (
         <OrderConfirmationPage
           order={confirmedOrder}
           proofUrl={proofUrl}
           onNewOrder={handleNewOrder}
           onTrack={() => {
-            setTrackPrefill(confirmedOrder?.order_number || '');
+            setTrackPrefill(
+              confirmedOrder?.order_number || ''
+            );
             setCurrentPage('track');
           }}
         />
@@ -682,7 +898,6 @@ export default function App() {
         />
       )}
 
-      {/* Customer information and Terms & Conditions modal */}
       {currentPage === 'customer-info' && pendingInfo && (
         <div
           className="modal-overlay"
@@ -730,35 +945,37 @@ export default function App() {
 
                   <h3>2. Payments</h3>
                   <p>
-                    Customers must complete the selected payment process.
-                    QR payments must be successfully verified before an
-                    order can be completed.
+                    Customers must complete the selected payment
+                    process. QR payments must be successfully
+                    verified before an order can be completed.
                   </p>
 
                   <h3>3. Flower Arrangements</h3>
                   <p>
-                    Flowers and handmade arrangements may vary slightly
-                    in appearance due to the availability and natural
-                    characteristics of the materials.
+                    Flowers and handmade arrangements may vary
+                    slightly in appearance due to the availability
+                    and natural characteristics of the materials.
                   </p>
 
                   <h3>4. Order Changes and Cancellations</h3>
                   <p>
-                    Please contact the shop as soon as possible if you
-                    need to request a change or cancellation. Requests
-                    are subject to the shop's confirmation.
+                    Please contact the shop as soon as possible if
+                    you need to request a change or cancellation.
+                    Requests are subject to the shop's confirmation.
                   </p>
 
                   <h3>5. Customer Information</h3>
                   <p>
                     Customers are responsible for providing accurate
-                    contact information for order-related communication.
+                    contact information for order-related
+                    communication.
                   </p>
 
                   <h3>6. Agreement</h3>
                   <p>
-                    By checking the acceptance box, you confirm that you
-                    have read and agree to these Terms &amp; Conditions.
+                    By checking the acceptance box, you confirm that
+                    you have read and agree to these Terms &amp;
+                    Conditions.
                   </p>
                 </div>
 
@@ -824,7 +1041,8 @@ export default function App() {
 
                       <span>
                         {formatPeso(
-                          (Number(item.price) || 0) * getQuantity(item)
+                          (Number(item.price) || 0) *
+                            getQuantity(item)
                         )}
                       </span>
                     </div>
@@ -908,7 +1126,8 @@ export default function App() {
                   />
 
                   <span>
-                    I have read and agree to the Terms &amp; Conditions.
+                    I have read and agree to the Terms &amp;
+                    Conditions.
                     <span style={{ color: '#dc2626' }}> *</span>
                   </span>
                 </label>
@@ -928,7 +1147,9 @@ export default function App() {
                     disabled={!acceptedTerms}
                     style={{
                       opacity: acceptedTerms ? 1 : 0.5,
-                      cursor: acceptedTerms ? 'pointer' : 'not-allowed',
+                      cursor: acceptedTerms
+                        ? 'pointer'
+                        : 'not-allowed',
                     }}
                   >
                     CONFIRM &amp; CONTINUE

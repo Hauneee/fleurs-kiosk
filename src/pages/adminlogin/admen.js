@@ -7,11 +7,6 @@
   const SUPABASE_ANON_KEY =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsa3Jqdm13d3VoaXRxbXlzcnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMjAyMTIsImV4cCI6MjEwNjU5NjIxMn0.CyrwrASzk3EAJ5ChSgSGExl0qffdXOHkzg1_o7lPCFA";
 
-  const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  );
-
   const ORDERS_TABLE = "orders";
   const ITEMS_RELATION = "order_items";
   const RATINGS_RPC = "get_ratings";
@@ -488,6 +483,380 @@
     products = data || [];
   }
 
+  // ==========================================
+  // PRODUCTS & INVENTORY
+  // ==========================================
+
+  const INVENTORY_LOW_STOCK_LIMIT = 10;
+
+  function inventoryProducts() {
+    return products.filter(p =>
+      p.is_active === true &&
+      String(p.name || "").trim().toUpperCase() !== "TEST MODE"
+    );
+  }
+
+  function inventoryStockStatus(stock) {
+    const qty = Number(stock) || 0;
+
+    if (qty <= 0) {
+      return {
+        label: "Out of stock",
+        className: "out"
+      };
+    }
+
+    if (qty <= INVENTORY_LOW_STOCK_LIMIT) {
+      return {
+        label: "Low stock",
+        className: "low"
+      };
+    }
+
+    return {
+      label: "In stock",
+      className: "in"
+    };
+  }
+
+  function inventoryMessage(message, type = "info") {
+    const el = $("inventoryMessage");
+
+    if (!el) return;
+
+    if (!message) {
+      el.textContent = "";
+      el.className = "hidden";
+      return;
+    }
+
+    el.textContent = message;
+    el.className = "notice " + type;
+  }
+
+  function renderInventory() {
+    const table = $("inventoryTable");
+    if (!table) return;
+
+    const activeProducts = inventoryProducts();
+
+    const totalUnits = activeProducts.reduce(
+      (sum, p) => sum + Math.max(0, Number(p.stock) || 0),
+      0
+    );
+
+    const lowStock = activeProducts.filter(p => {
+      const stock = Number(p.stock) || 0;
+      return stock > 0 && stock <= INVENTORY_LOW_STOCK_LIMIT;
+    });
+
+    const outOfStock = activeProducts.filter(
+      p => (Number(p.stock) || 0) <= 0
+    );
+
+    if ($("inventoryTotal")) {
+      $("inventoryTotal").textContent = totalUnits.toLocaleString();
+    }
+
+    if ($("inventoryActive")) {
+      $("inventoryActive").textContent =
+        activeProducts.length.toLocaleString();
+    }
+
+    if ($("inventoryLow")) {
+      $("inventoryLow").textContent = lowStock.length.toLocaleString();
+    }
+
+    if ($("inventoryOut")) {
+      $("inventoryOut").textContent =
+        outOfStock.length.toLocaleString();
+    }
+
+    const search = ($("inventorySearch")?.value || "")
+      .trim()
+      .toLowerCase();
+
+    const filter = $("inventoryStockFilter")?.value || "all";
+
+    const categoryFilter =
+      $("inventoryCategoryFilter")?.value || "all";
+
+    const filtered = activeProducts
+      .filter(p => {
+        const name = String(p.name || "").toLowerCase();
+        const category = String(p.category || "").toLowerCase();
+        const description = String(p.description || "").toLowerCase();
+
+        const matchesSearch =
+          !search ||
+          name.includes(search) ||
+          category.includes(search) ||
+          description.includes(search);
+
+        const stock = Number(p.stock) || 0;
+
+        const matchesFilter =
+          filter === "all" ||
+          (filter === "in" && stock > INVENTORY_LOW_STOCK_LIMIT) ||
+          (filter === "low" &&
+            stock > 0 &&
+            stock <= INVENTORY_LOW_STOCK_LIMIT) ||
+          (filter === "out" && stock <= 0);
+
+        // categoryFromValue() handles "Solo", "solo-flower",
+        // "Solo Flower", etc. and returns Solo / Triple / Bouquet / Other.
+        const matchesCategory =
+          categoryFilter === "all" ||
+          categoryFromValue(p.category) === categoryFromValue(categoryFilter);
+
+        return matchesSearch && matchesFilter && matchesCategory;
+      })
+      .sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""))
+      );
+
+    if (!filtered.length) {
+      table.innerHTML = emptyBlock(
+        activeProducts.length
+          ? "No products match your search or filter."
+          : "No active products found."
+      );
+      return;
+    }
+
+    table.innerHTML = `
+      <div class="table-wrap">
+        <table class="inventory-data-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Current stock</th>
+              <th>Status</th>
+              <th>Update stock</th>
+              <th>Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(p => {
+              const stock = Number(p.stock) || 0;
+              const status = inventoryStockStatus(stock);
+              const imageUrl = String(p.image_url || "").trim();
+
+              return `
+                <tr>
+                  <td>
+                    <div class="inventory-product-cell">
+                      ${
+                        imageUrl
+                          ? `<img
+                              class="inventory-product-image"
+                              src="${esc(imageUrl)}"
+                              alt="${esc(p.name || "Product image")}"
+                              loading="lazy"
+                              onerror="this.classList.add('image-missing');this.removeAttribute('src')"
+                            >`
+                          : `<div class="inventory-product-image image-missing"
+                              aria-label="No product image">🌸</div>`
+                      }
+                      <div class="inventory-product-info">
+                        <strong>${esc(p.name || "Unnamed product")}</strong>
+                        ${
+                          p.description
+                            ? `<div class="muted small">${esc(p.description)}</div>`
+                            : ""
+                        }
+                      </div>
+                    </div>
+                  </td>
+
+                  <td><strong>${esc(p.category || "Other")}</strong></td>
+                  <td>${esc(money(p.price))}</td>
+                  <td><strong>${stock}</strong></td>
+
+                  <td>
+                    <span class="inventory-badge ${status.className}">
+                      ${status.label}
+                    </span>
+                  </td>
+
+                  <td>
+                    <form class="inventory-update-form"
+                      data-inventory-form="${esc(p.id)}">
+                      <input
+                        class="inventory-stock-input"
+                        type="number"
+                        name="stock"
+                        min="0"
+                        step="1"
+                        value="${stock}"
+                        required
+                        aria-label="New stock for ${esc(p.name)}"
+                      >
+                      <button
+                        class="btn small-btn"
+                        type="submit"
+                        data-stock-save="${esc(p.id)}"
+                      >Save</button>
+                    </form>
+                  </td>
+
+                  <td>
+                    <button
+                      class="btn small-btn"
+                      type="button"
+                      data-edit-product="${esc(p.id)}"
+                    >Edit</button>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  async function refreshInventory() {
+    inventoryMessage("");
+
+    if ($("inventoryRefresh")) {
+      $("inventoryRefresh").disabled = true;
+    }
+
+    try {
+      const { data, error } = await sb
+        .from("products")
+        .select("*")
+        .order("name", { ascending: true })
+        .limit(2000);
+
+      if (error) throw error;
+
+      products = data || [];
+
+      renderInventory();
+
+      inventoryMessage("Inventory refreshed successfully.", "success");
+    } catch (error) {
+      console.error("Inventory refresh failed:", error);
+
+      inventoryMessage(
+        "Unable to load inventory: " +
+          (error?.message || String(error)),
+        "error"
+      );
+    } finally {
+      if ($("inventoryRefresh")) {
+        $("inventoryRefresh").disabled = false;
+      }
+    }
+  }
+
+  async function saveInventoryStock(productId, form) {
+    const input = form.querySelector('[name="stock"]');
+    const button = form.querySelector('[type="submit"]');
+
+    if (!input || !button) return;
+
+    const rawValue = input.value.trim();
+    const quantity = Number(rawValue);
+
+    if (
+      rawValue === "" ||
+      !Number.isSafeInteger(quantity) ||
+      quantity < 0
+    ) {
+      inventoryMessage(
+        "Stock must be a whole number greater than or equal to zero.",
+        "error"
+      );
+
+      input.focus();
+      return;
+    }
+
+    const product = products.find(
+      p => String(p.id) === String(productId)
+    );
+
+    if (!product) {
+      inventoryMessage(
+        "Product not found. Refresh the inventory and try again.",
+        "error"
+      );
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Saving…";
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await sb.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      if (!sessionData.session) {
+        throw new Error("Please sign in again before updating stock.");
+      }
+
+      const { data, error } = await sb
+        .from("products")
+        .update({ stock: quantity })
+        .eq("id", productId)
+        .select("id, name, stock")
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        throw new Error(
+          "No product was updated. Supabase blocked the change (missing UPDATE permission on the products table for this account)."
+        );
+      }
+
+      const index = products.findIndex(
+        p => String(p.id) === String(data.id)
+      );
+
+      if (index !== -1) {
+        products[index] = {
+          ...products[index],
+          stock: data.stock
+        };
+      }
+
+      renderInventory();
+
+      inventoryMessage(
+        `${data.name} stock updated to ${data.stock}.`,
+        "success"
+      );
+
+      notify("Inventory stock updated.", "success");
+    } catch (error) {
+      console.error("Stock update failed:", error);
+
+      inventoryMessage(
+        "Could not update stock: " +
+          (error?.message || String(error)) +
+          " Check your login and staff permissions.",
+        "error"
+      );
+
+      notify("Stock update failed.", "error");
+    } finally {
+      // The form may have been replaced by renderInventory().
+      // Restore the button only if the original form still exists.
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = "Save";
+      }
+    }
+  }
+
   async function refreshAll() {
     setGlobalMessage("");
     notify("Loading store data…");
@@ -545,7 +914,8 @@
       orders: "Orders & Transactions",
       customers: "Customers",
       feedback: "Feedback & Ratings",
-      reports: "Sales Reports"
+      reports: "Sales Reports",
+      inventory: "Products & Inventory"
     };
 
     $("topTitle").textContent = titles[page] || "Dashboard";
@@ -556,6 +926,7 @@
     if (page === "customers") renderCustomers();
     if (page === "feedback") renderFeedback();
     if (page === "reports") renderReport();
+    if (page === "inventory") renderInventory();
   }
 
   function renderAll() {
@@ -564,6 +935,7 @@
     renderCustomers();
     renderFeedback();
     renderReport();
+    renderInventory();
   }
 
   function renderDashboard() {
@@ -1321,9 +1693,7 @@
     $("orderModal").classList.remove("hidden");
   }
 
-  // END OF PART 1
-  // Continue directly with PART 2 below.
-    // PRODUCT CATEGORIES
+  // PRODUCT CATEGORIES
   const PRODUCT_CATEGORIES = ["Solo", "Triple", "Bouquet"];
 
   const categoryFromValue = value => {
@@ -1332,9 +1702,9 @@
       .trim()
       .replace(/[_\s]+/g, "-");
 
-    if (category === "solo" || category === "solo-flower") return "Solo";
-    if (category === "triple" || category === "triple-flower") return "Triple";
-    if (category === "bouquet") return "Bouquet";
+    if (category.includes("solo")) return "Solo";
+    if (category.includes("triple")) return "Triple";
+    if (category.includes("bouquet")) return "Bouquet";
 
     return "Other";
   };
@@ -1958,13 +2328,595 @@
     }
   }
 
+  // ==========================================
+  // ADD / EDIT PRODUCT
+  // (builds its own modal, button and styles; no admin.html changes needed)
+  // ==========================================
+
+  const PRODUCT_IMAGE_BUCKET = "product-images";
+  const PRODUCT_FORM_CATEGORIES = ["Solo", "Triple", "Bouquet"];
+  const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+
+  let productEditingId = null;
+  let productImageFile = null;
+  let productPreviewUrl = "";
+  let productSaving = false;
+
+  function injectProductStyles() {
+    if ($("pmStyles")) return;
+
+    const style = document.createElement("style");
+
+    style.id = "pmStyles";
+
+    style.textContent = `
+      .pm-overlay{position:fixed;inset:0;z-index:1000;background:rgba(40,32,36,.5);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+      .pm-overlay[hidden]{display:none !important}
+      .pm-panel{background:#fff;color:#302a2b;width:100%;max-width:480px;border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:92vh;overflow-y:auto}
+      .pm-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+      .pm-head h2{margin:0;font-size:20px}
+      .pm-close{border:0;background:transparent;font-size:28px;line-height:1;cursor:pointer;color:#898184}
+      .pm-field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+      .pm-field label{font-size:13px;font-weight:600}
+      .pm-field input,.pm-field select{padding:10px 12px;border:1px solid #e3dad9;border-radius:10px;font:inherit;background:#fff;color:inherit;width:100%;box-sizing:border-box}
+      .pm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      .pm-photo-actions{display:flex;gap:8px;flex-wrap:wrap}
+      .pm-preview{display:flex;align-items:center;justify-content:center;width:100%;height:200px;margin-top:6px;border:1px dashed #e3dad9;border-radius:12px;background:#fcfaf9;overflow:hidden;color:#898184;font-size:13px}
+      .pm-preview img{width:100%;height:100%;object-fit:contain}
+      .pm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+      .pm-msg{padding:10px 12px;border-radius:10px;font-size:13px;margin-top:4px}
+      .pm-msg[hidden]{display:none !important}
+      .pm-msg.error{background:#fde8e8;color:#a93f4c}
+      .pm-msg.info{background:#eef3fb;color:#3863a7}
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function ensureProductModal() {
+    if ($("pmOverlay")) return;
+
+    const overlay = document.createElement("div");
+
+    overlay.id = "pmOverlay";
+    overlay.className = "pm-overlay";
+    overlay.hidden = true;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "pmTitle");
+
+    overlay.innerHTML = `
+      <div class="pm-panel">
+        <div class="pm-head">
+          <div>
+            <h2 id="pmTitle">Add New Product</h2>
+            <div class="muted small" id="pmSubtitle"></div>
+          </div>
+          <button type="button" class="pm-close" id="pmClose"
+                  aria-label="Close">×</button>
+        </div>
+
+        <form id="pmForm" novalidate>
+          <div class="pm-field">
+            <label for="pmName">Product name</label>
+            <input id="pmName" type="text" maxlength="120"
+                   placeholder="Enter product name" required>
+          </div>
+
+          <div class="pm-field">
+            <label for="pmCategory">Category</label>
+            <select id="pmCategory" required>
+              <option value="">Select category</option>
+              ${PRODUCT_FORM_CATEGORIES.map(c =>
+                `<option value="${c}">${c}</option>`
+              ).join("")}
+            </select>
+          </div>
+
+          <div class="pm-row">
+            <div class="pm-field">
+              <label for="pmPrice">Price (₱)</label>
+              <input id="pmPrice" type="number" min="0.01" step="0.01"
+                     inputmode="decimal" placeholder="0.00" required>
+            </div>
+
+            <div class="pm-field">
+              <label for="pmStock" id="pmStockLabel">Initial stock</label>
+              <input id="pmStock" type="number" min="0" step="1"
+                     inputmode="numeric" placeholder="0" required>
+            </div>
+          </div>
+
+          <div class="pm-field">
+            <label>Photo</label>
+
+            <div class="pm-photo-actions">
+              <button type="button" class="btn small-btn"
+                      id="pmGalleryBtn">📁 Choose photo</button>
+              <button type="button" class="btn small-btn"
+                      id="pmCameraBtn">📷 Take photo</button>
+            </div>
+
+            <input id="pmGallery" type="file" accept="image/*"
+                   style="display:none">
+            <input id="pmCamera" type="file" accept="image/*"
+                   capture="environment" style="display:none">
+
+            <div class="pm-preview" id="pmPreview">No photo yet</div>
+          </div>
+
+          <div id="pmMessage" class="pm-msg" hidden></div>
+
+          <div class="pm-actions">
+            <button type="button" class="btn" id="pmCancel">Cancel</button>
+            <button type="submit" class="btn primary"
+                    id="pmSave">Save product</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    $("pmClose").addEventListener("click", closeProductForm);
+    $("pmCancel").addEventListener("click", closeProductForm);
+
+    overlay.addEventListener("click", event => {
+      if (event.target === overlay) closeProductForm();
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !overlay.hidden) {
+        closeProductForm();
+      }
+    });
+
+    $("pmGalleryBtn").addEventListener("click", () => $("pmGallery").click());
+    $("pmCameraBtn").addEventListener("click", () => $("pmCamera").click());
+
+    $("pmGallery").addEventListener("change", event =>
+      handleProductPhoto(event.target, $("pmCamera"))
+    );
+
+    $("pmCamera").addEventListener("change", event =>
+      handleProductPhoto(event.target, $("pmGallery"))
+    );
+
+    $("pmForm").addEventListener("submit", saveProduct);
+  }
+
+  function setProductMessage(message, type = "error") {
+    const el = $("pmMessage");
+
+    if (!el) return;
+
+    if (!message) {
+      el.hidden = true;
+      el.textContent = "";
+      return;
+    }
+
+    el.hidden = false;
+    el.className = "pm-msg " + type;
+    el.textContent = message;
+  }
+
+  function setProductPreview(url) {
+    const box = $("pmPreview");
+
+    if (!box) return;
+
+    box.innerHTML = "";
+
+    if (!url) {
+      box.textContent = "No photo yet";
+      return;
+    }
+
+    const img = document.createElement("img");
+
+    img.alt = "Product preview";
+    img.src = url;
+
+    img.onerror = () => {
+      box.textContent = "Photo could not be loaded";
+    };
+
+    box.appendChild(img);
+  }
+
+  function clearProductPreviewUrl() {
+    if (productPreviewUrl) {
+      URL.revokeObjectURL(productPreviewUrl);
+      productPreviewUrl = "";
+    }
+  }
+
+  function handleProductPhoto(input, otherInput) {
+    const file = input.files && input.files[0];
+
+    if (!file) return;
+
+    if (!String(file.type).startsWith("image/")) {
+      setProductMessage("Please choose an image file.");
+      input.value = "";
+      return;
+    }
+
+    if (file.size > MAX_PHOTO_BYTES) {
+      setProductMessage("That photo is too large. Please use one under 15 MB.");
+      input.value = "";
+      return;
+    }
+
+    if (otherInput) otherInput.value = "";
+
+    setProductMessage("");
+
+    productImageFile = file;
+
+    clearProductPreviewUrl();
+
+    productPreviewUrl = URL.createObjectURL(file);
+
+    setProductPreview(productPreviewUrl);
+  }
+
+  function openProductForm(productId = null) {
+    injectProductStyles();
+    ensureProductModal();
+
+    const product = productId
+      ? products.find(p => String(p.id) === String(productId))
+      : null;
+
+    if (productId && !product) {
+      notify("Product not found. Refresh the inventory and try again.", "error");
+      return;
+    }
+
+    productEditingId = product ? product.id : null;
+    productImageFile = null;
+
+    clearProductPreviewUrl();
+
+    $("pmTitle").textContent = product ? "Edit Product" : "Add New Product";
+
+    $("pmSubtitle").textContent = product
+      ? "Update the details, price, photo or stock."
+      : "Enter the product details below.";
+
+    $("pmName").value = product ? (product.name || "") : "";
+
+    const normalized = product ? categoryFromValue(product.category) : "";
+
+    $("pmCategory").value =
+      PRODUCT_FORM_CATEGORIES.includes(normalized) ? normalized : "";
+
+    $("pmPrice").value = product ? (Number(product.price) || "") : "";
+    $("pmStock").value = product ? (Number(product.stock) || 0) : "";
+
+    $("pmStockLabel").textContent = product ? "Stock" : "Initial stock";
+    $("pmSave").textContent = product ? "Save changes" : "Save product";
+    $("pmSave").disabled = false;
+
+    $("pmGallery").value = "";
+    $("pmCamera").value = "";
+
+    setProductPreview(product ? String(product.image_url || "").trim() : "");
+    setProductMessage("");
+
+    $("pmOverlay").hidden = false;
+
+    $("pmName").focus();
+  }
+
+  function closeProductForm() {
+    if (productSaving) return;
+
+    const overlay = $("pmOverlay");
+
+    if (overlay) overlay.hidden = true;
+
+    clearProductPreviewUrl();
+
+    productImageFile = null;
+    productEditingId = null;
+  }
+
+  // Shrinks big phone photos before upload (max 1200px, JPEG).
+  function compressImage(file, maxSize = 1200, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+
+        const scale = Math.min(
+          1,
+          maxSize / Math.max(img.naturalWidth, img.naturalHeight)
+        );
+
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+
+        const canvas = document.createElement("canvas");
+
+        canvas.width = w;
+        canvas.height = h;
+
+        const ctx = canvas.getContext("2d");
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        canvas.toBlob(
+          blob => blob
+            ? resolve(blob)
+            : reject(new Error("Could not process the photo.")),
+          "image/jpeg",
+          quality
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not read the photo."));
+      };
+
+      img.src = url;
+    });
+  }
+
+  async function uploadProductImage(file) {
+    let body = file;
+    let contentType = file.type || "image/jpeg";
+    let ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+
+    try {
+      body = await compressImage(file);
+      contentType = "image/jpeg";
+      ext = "jpg";
+    } catch (error) {
+      console.warn("Photo compression skipped:", error.message);
+    }
+
+    const path =
+      `products/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const { error } = await sb.storage
+      .from(PRODUCT_IMAGE_BUCKET)
+      .upload(path, body, {
+        contentType,
+        cacheControl: "3600",
+        upsert: false
+      });
+
+    if (error) {
+      throw new Error(
+        "Photo upload failed: " + error.message +
+        ` (check that the "${PRODUCT_IMAGE_BUCKET}" bucket exists and allows uploads)`
+      );
+    }
+
+    const { data } = sb.storage
+      .from(PRODUCT_IMAGE_BUCKET)
+      .getPublicUrl(path);
+
+    if (!data?.publicUrl) {
+      throw new Error("Photo uploaded but its public URL could not be created.");
+    }
+
+    return data.publicUrl;
+  }
+
+  // Keeps the same raw category text your database already uses
+  // (e.g. "solo-flower") instead of forcing "Solo".
+  function rawCategoryFor(categoryName, existing) {
+    if (existing && categoryFromValue(existing.category) === categoryName) {
+      return existing.category;
+    }
+
+    const match = products.find(p =>
+      p.category && categoryFromValue(p.category) === categoryName
+    );
+
+    return match ? match.category : categoryName;
+  }
+
+  async function saveProduct(event) {
+    event.preventDefault();
+
+    if (productSaving) return;
+
+    const name = $("pmName").value.trim();
+    const categoryName = $("pmCategory").value;
+    const price = Number($("pmPrice").value);
+    const stockRaw = $("pmStock").value.trim();
+    const stock = Number(stockRaw);
+
+    if (!name) {
+      setProductMessage("Please enter the product name.");
+      $("pmName").focus();
+      return;
+    }
+
+    if (!PRODUCT_FORM_CATEGORIES.includes(categoryName)) {
+      setProductMessage("Please select a category.");
+      $("pmCategory").focus();
+      return;
+    }
+
+    if (!Number.isFinite(price) || price <= 0) {
+      setProductMessage("Price must be greater than zero.");
+      $("pmPrice").focus();
+      return;
+    }
+
+    if (stockRaw === "" || !Number.isSafeInteger(stock) || stock < 0) {
+      setProductMessage("Stock must be a whole number, zero or higher.");
+      $("pmStock").focus();
+      return;
+    }
+
+    const existing = productEditingId
+      ? products.find(p => String(p.id) === String(productEditingId))
+      : null;
+
+    productSaving = true;
+
+    $("pmSave").disabled = true;
+    $("pmSave").textContent = "Saving…";
+
+    setProductMessage("");
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await sb.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      if (!sessionData.session) {
+        throw new Error("Please sign in again before saving products.");
+      }
+
+      let imageUrl = existing ? (existing.image_url || null) : null;
+
+      if (productImageFile) {
+        $("pmSave").textContent = "Uploading photo…";
+        imageUrl = await uploadProductImage(productImageFile);
+        $("pmSave").textContent = "Saving…";
+      }
+
+      const payload = {
+        name,
+        category: rawCategoryFor(categoryName, existing),
+        price,
+        stock,
+        image_url: imageUrl
+      };
+
+      let saved;
+
+      if (existing) {
+        const { data, error } = await sb
+          .from("products")
+          .update(payload)
+          .eq("id", existing.id)
+          .select("*")
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (!data) {
+          throw new Error(
+            "Nothing was updated. Supabase blocked the change (missing UPDATE permission on the products table for this account)."
+          );
+        }
+
+        saved = data;
+
+        const index = products.findIndex(
+          p => String(p.id) === String(saved.id)
+        );
+
+        if (index !== -1) {
+          products[index] = { ...products[index], ...saved };
+        }
+      } else {
+        const { data, error } = await sb
+          .from("products")
+          .insert({ ...payload, is_active: true })
+          .select("*")
+          .single();
+
+        if (error) throw error;
+
+        saved = data;
+
+        products.push(saved);
+      }
+
+      productSaving = false;
+
+      closeProductForm();
+      renderInventory();
+
+      inventoryMessage(
+        existing
+          ? `${saved.name} was updated.`
+          : `${saved.name} was added to your products.`,
+        "success"
+      );
+
+      notify(existing ? "Product updated." : "Product added.", "success");
+    } catch (error) {
+      console.error("Save product failed:", error);
+
+      setProductMessage(
+        (error?.message || String(error)) +
+        (/row-level security|permission|policy/i.test(error?.message || "")
+          ? " Check your Supabase staff permissions (RLS policies)."
+          : "")
+      );
+    } finally {
+      productSaving = false;
+
+      if ($("pmSave")) {
+        $("pmSave").disabled = false;
+        $("pmSave").textContent =
+          productEditingId ? "Save changes" : "Save product";
+      }
+    }
+  }
+
+  function setupProductManager() {
+    injectProductStyles();
+    ensureProductModal();
+
+    let addBtn = $("addProductButton");
+
+    if (!addBtn) {
+      addBtn = document.createElement("button");
+
+      addBtn.id = "addProductButton";
+      addBtn.type = "button";
+      addBtn.className = "btn primary";
+      addBtn.textContent = "+ Add Product";
+
+      const toolbar = document.querySelector(".inventory-toolbar");
+      const refresh = $("inventoryRefresh");
+
+      if (toolbar && refresh && refresh.parentElement === toolbar) {
+        toolbar.insertBefore(addBtn, refresh);
+      } else if (toolbar) {
+        toolbar.appendChild(addBtn);
+      } else if ($("page-inventory")) {
+        $("page-inventory").prepend(addBtn);
+      }
+    }
+
+    addBtn.addEventListener("click", () => openProductForm());
+
+    if ($("inventoryTable")) {
+      $("inventoryTable").addEventListener("click", event => {
+        const button = event.target.closest("[data-edit-product]");
+
+        if (button) openProductForm(button.dataset.editProduct);
+      });
+    }
+  }
+
   // LOGIN
   $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
 
-    if (!validConfig()) {
-      $("loginMessage").textContent =
-        "Please configure your Supabase URL and anon/publishable key in the code first.";
+    if (!sb) {
+      $("loginMessage").textContent = validConfig()
+        ? "Supabase library did not load. Check the Supabase script in admin.html."
+        : "Please configure your Supabase URL and anon/publishable key in the code first.";
 
       return;
     }
@@ -2081,6 +3033,11 @@
       $("loginPassword").value = "";
       $("loginMessage").textContent = "";
 
+      // Reset inventory filters so the next login starts clean
+      if ($("inventoryCategoryFilter")) {
+        $("inventoryCategoryFilter").value = "all";
+      }
+
       showPage("dashboard");
     } finally {
       $("confirmLogout").disabled = false;
@@ -2098,6 +3055,37 @@
 
     renderOrders();
   });
+
+  // INVENTORY FILTERS AND STOCK UPDATES
+  if ($("inventorySearch")) {
+    $("inventorySearch").addEventListener("input", renderInventory);
+  }
+
+  if ($("inventoryStockFilter")) {
+    $("inventoryStockFilter").addEventListener("change", renderInventory);
+  }
+
+  if ($("inventoryCategoryFilter")) {
+    $("inventoryCategoryFilter").addEventListener("change", renderInventory);
+  }
+
+  if ($("inventoryRefresh")) {
+    $("inventoryRefresh").addEventListener("click", refreshInventory);
+  }
+
+  if ($("inventoryTable")) {
+    $("inventoryTable").addEventListener("submit", async event => {
+      const form = event.target.closest("[data-inventory-form]");
+
+      if (!form) return;
+
+      event.preventDefault();
+
+      const productId = form.dataset.inventoryForm;
+
+      await saveInventoryStock(productId, form);
+    });
+  }
 
   // CUSTOMER AND FEEDBACK FILTERS
   $("customerSearch").addEventListener("input", renderCustomers);
@@ -2179,11 +3167,12 @@
 
   syncReportControls();
   setupBranding();
+  setupProductManager();
 
-  // INITIALIZE SUPABASE
+  // INITIALIZE SUPABASE (single client, created only once)
   if (!validConfig()) {
     $("loginMessage").textContent =
-      "Set SUPABASE_URL and SUPABASE_ANON_KEY in the configuration section of this HTML.";
+      "Set SUPABASE_URL and SUPABASE_ANON_KEY in the configuration section of this file.";
   } else if (!window.supabase) {
     $("loginMessage").textContent =
       "Supabase library did not load. Check the Supabase script in admin.html.";

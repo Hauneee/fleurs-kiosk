@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { QuantitySelector } from './QuantitySelector';
 import { Button } from './Button';
 import {
@@ -7,6 +6,7 @@ import {
   ArrowLeft,
   CreditCard,
 } from 'lucide-react';
+import { getStockInfo } from '../utils/stock';
 
 const MAX_ITEMS = 10;
 const MAX_ITEMS_MESSAGE = 'Maximum order is only 10 items!';
@@ -18,81 +18,125 @@ export const ProductModal = ({
   onAddToCart,
   onCheckoutNow,
   maxQuantity = MAX_ITEMS,
+  quantityInCart = 0,
   onLimitReached,
 }) => {
   const [quantity, setQuantity] = useState(1);
 
-  const productStock =
-    product?.stock == null || product.stock === ''
-      ? 50
-      : Number(product.stock);
+  const stockInfo = useMemo(
+    () => getStockInfo(product),
+    [product]
+  );
 
-  const stock = Number.isFinite(productStock)
-    ? Math.max(0, productStock)
-    : 0;
+  const { qty: stockQty, soldOut, label: stockLabel } = stockInfo;
+
+  const stockLimit =
+    stockQty === null ? MAX_ITEMS : stockQty;
+
+  const orderLimit = Math.max(
+    0,
+    Math.min(
+      MAX_ITEMS,
+      Number.isFinite(Number(maxQuantity))
+        ? Math.max(0, Number(maxQuantity))
+        : MAX_ITEMS
+    )
+  );
+
+  const cartQty = Math.max(0, Number(quantityInCart) || 0);
 
   const availableQuantity = Math.max(
     0,
-    Math.min(Number(maxQuantity) || 0, stock)
+    Math.min(orderLimit, stockLimit - cartQty)
   );
 
   useEffect(() => {
-    if (isOpen && product) {
-      setQuantity(availableQuantity > 0 ? 1 : 0);
-    }
-  }, [isOpen, product?.id, availableQuantity]);
+    if (!isOpen || !product) return;
+
+    setQuantity(availableQuantity > 0 ? 1 : 0);
+  }, [isOpen, product?.id]);
 
   useEffect(() => {
-    if (availableQuantity <= 0) {
-      setQuantity(0);
-      return;
-    }
-
-    setQuantity((currentQuantity) =>
-      Math.min(Math.max(1, currentQuantity), availableQuantity)
-    );
+    setQuantity((current) => {
+      if (availableQuantity <= 0) return 0;
+      return Math.min(Math.max(1, current), availableQuantity);
+    });
   }, [availableQuantity]);
 
   if (!isOpen || !product) return null;
 
-  const isValidQuantity = () =>
+  const isValidQuantity =
     availableQuantity > 0 &&
+    Number.isInteger(quantity) &&
     quantity >= 1 &&
     quantity <= availableQuantity;
 
+  const notifyLimit = (message = MAX_ITEMS_MESSAGE) => {
+    if (typeof onLimitReached === 'function') {
+      onLimitReached(message);
+    } else {
+      console.warn(message);
+    }
+  };
+
   const handleQuantityChange = (newQuantity) => {
-    const requestedQuantity = Number(newQuantity);
+    const requested = Number(newQuantity);
 
-    if (!Number.isInteger(requestedQuantity)) return;
+    if (!Number.isInteger(requested) || requested < 1) return;
 
-    if (requestedQuantity > availableQuantity) {
-      if (onLimitReached) onLimitReached();
-      else console.warn(MAX_ITEMS_MESSAGE);
+    if (requested > availableQuantity) {
+      notifyLimit(
+        soldOut
+          ? 'This product is currently out of stock.'
+          : stockQty !== null && stockQty - cartQty < requested
+            ? `Only ${Math.max(0, stockQty - cartQty)} more available.`
+            : MAX_ITEMS_MESSAGE
+      );
       return;
     }
 
-    if (requestedQuantity < 1) return;
-    setQuantity(requestedQuantity);
+    setQuantity(requested);
   };
 
   const handleAddToCart = () => {
-    if (!isValidQuantity()) {
-      if (onLimitReached) onLimitReached();
-      else console.warn(MAX_ITEMS_MESSAGE);
+    if (!isValidQuantity) {
+      notifyLimit(
+        soldOut
+          ? 'This product is currently out of stock.'
+          : 'Please choose an available quantity.'
+      );
       return;
     }
 
-    const result = onAddToCart(product, quantity);
+    const result = onAddToCart?.(product, quantity);
+
+    if (result && typeof result.then === 'function') {
+      result
+        .then((success) => {
+          if (success === false) return;
+          setQuantity(1);
+          onClose?.();
+        })
+        .catch((error) => {
+          console.error('Could not add product to cart:', error);
+        });
+
+      return;
+    }
+
     if (result === false) return;
 
     setQuantity(1);
-    onClose();
+    onClose?.();
   };
 
   const handleCheckoutNow = () => {
-    if (!isValidQuantity()) {
-      if (onLimitReached) onLimitReached();
-      else console.warn(MAX_ITEMS_MESSAGE);
+    if (!isValidQuantity) {
+      notifyLimit(
+        soldOut
+          ? 'This product is currently out of stock.'
+          : 'Please choose an available quantity.'
+      );
       return;
     }
 
@@ -102,11 +146,30 @@ export const ProductModal = ({
     }
 
     const result = onCheckoutNow(product, quantity);
+
+    if (result && typeof result.then === 'function') {
+      result
+        .then((success) => {
+          if (success === false) return;
+          setQuantity(1);
+          onClose?.();
+        })
+        .catch((error) => {
+          console.error('Could not start checkout:', error);
+        });
+
+      return;
+    }
+
     if (result === false) return;
 
     setQuantity(1);
-    onClose();
+    onClose?.();
   };
+
+  const unavailableMessage = soldOut
+    ? 'This product is out of stock.'
+    : 'You have reached the available order limit.';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -128,6 +191,19 @@ export const ProductModal = ({
           <p className="fl-pm__desc">{product.description}</p>
         )}
 
+        {stockLabel && (
+          <p
+            role="status"
+            style={{
+              color: soldOut ? '#b42318' : '#946200',
+              fontWeight: 600,
+              margin: '8px 0',
+            }}
+          >
+            {stockLabel}
+          </p>
+        )}
+
         <div className="fl-pm__qty">
           <div className="fl-pm__qty-label">Choose quantity</div>
 
@@ -139,17 +215,15 @@ export const ProductModal = ({
               max={availableQuantity}
             />
           ) : (
-            <p role="status">
-              {stock <= 0
-                ? 'This product is out of stock.'
-                : MAX_ITEMS_MESSAGE}
-            </p>
+            <p role="status">{unavailableMessage}</p>
           )}
 
           <p style={{ marginTop: '8px', fontSize: '0.9rem' }}>
-            {`You can add up to ${availableQuantity} more item${
-              availableQuantity === 1 ? '' : 's'
-            } to your order.`}
+            {availableQuantity > 0
+              ? `You can add up to ${availableQuantity} more item${
+                  availableQuantity === 1 ? '' : 's'
+                } to your order.`
+              : 'No additional units are available to add.'}
           </p>
         </div>
 
@@ -165,18 +239,21 @@ export const ProductModal = ({
             variant="accent"
             size="xl"
             onClick={handleAddToCart}
-            disabled={!isValidQuantity()}
+            disabled={!isValidQuantity}
             icon={<ShoppingBag size={24} strokeWidth={2.5} />}
           >
             Add to cart · ₱
-            {((Number(product.price) || 0) * quantity).toLocaleString()}
+            {(
+              (Number(product.price) || 0) *
+              (quantity > 0 ? quantity : 0)
+            ).toLocaleString()}
           </Button>
 
           <Button
             variant="accent"
             size="xl"
             onClick={handleCheckoutNow}
-            disabled={!isValidQuantity()}
+            disabled={!isValidQuantity}
             icon={<CreditCard size={22} />}
           >
             Checkout Now
