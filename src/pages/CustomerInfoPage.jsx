@@ -30,15 +30,15 @@ const FIELDS = [
     maxLength: 20,
   },
   {
-    key: 'email',
-    label: 'Email Address',
-    type: 'email',
-    placeholder: 'name@gmail.com',
-    Icon: Mail,
-    autoComplete: 'email',
-    inputMode: 'email',
-    maxLength: 25,
-  },
+  key: 'email',
+  label: 'Email Address',
+  type: 'email',
+  placeholder: 'name@gmail.com',
+  Icon: Mail,
+  autoComplete: 'email',
+  inputMode: 'email',
+  maxLength: 40,
+},
   {
     key: 'phone',
     label: 'Phone Number',
@@ -103,8 +103,8 @@ const validate = (values) => {
 
   if (!email) {
     errors.email = 'Please enter your email address.';
-  } else if (email.length > 25) {
-    errors.email = 'Your email cannot exceed 25 characters.';
+ } else if (email.length > 40) {
+  errors.email = 'Your email cannot exceed 40 characters.';
   } else {
     const emailError = getEmailError(email);
     if (emailError) errors.email = emailError;
@@ -126,7 +126,7 @@ const validate = (values) => {
 export const CustomerInfoPage = ({ initialValues, onBack, onContinue }) => {
   const [values, setValues] = useState({
     name: normalizeName((initialValues?.name || '').slice(0, 20)),
-    email: (initialValues?.email || '').replace(/\s/g, '').slice(0, 25),
+    email: (initialValues?.email || '').replace(/\s/g, '').slice(0, 40),
     phone: (initialValues?.phone || '').replace(/\D/g, '').slice(0, 11),
   });
 
@@ -141,7 +141,7 @@ export const CustomerInfoPage = ({ initialValues, onBack, onContinue }) => {
     let value = event.target.value;
 
     if (key === 'name') value = normalizeName(value).slice(0, 20);
-    if (key === 'email') value = value.replace(/\s/g, '').slice(0, 25);
+   if (key === 'email') value = value.replace(/\s/g, '').slice(0, 40);
     if (key === 'phone') value = value.replace(/\D/g, '').slice(0, 11);
 
     const nextValues = { ...values, [key]: value };
@@ -233,9 +233,9 @@ export const CustomerInfoPage = ({ initialValues, onBack, onContinue }) => {
                   )}
 
                   {key === 'email' && !fieldError && (
-                    <p className="customer-info-hint" id="customer-email-hint">
-                      Maximum 25 characters. Use an email address you can access.
-                    </p>
+                   <p className="customer-info-hint" id="customer-email-hint">
+  Maximum 40 characters. Use an email address you can access.
+</p>
                   )}
 
                   {key === 'phone' && !fieldError && (
