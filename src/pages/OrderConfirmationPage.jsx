@@ -58,12 +58,26 @@ const getItemPrice = (item) => {
   );
 };
 
+// Load the actual Blossom's CRAFT logo from the public folder.
+const loadReceiptLogo = () =>
+  new Promise((resolve, reject) => {
+    const logo = new Image();
+    logo.onload = () => resolve(logo);
+    logo.onerror = () =>
+      reject(
+        new Error("Could not load public/logo.jpg Please check the logo filename.")
+      );
+    logo.src = `${import.meta.env.BASE_URL}logo.jpg`;
+  });
+
 // ===============================
 // FULL RECEIPT GENERATOR
 // ===============================
 
-const drawFullReceipt = (order) =>
-  new Promise((resolve, reject) => {
+const drawFullReceipt = async (order) => {
+  const logo = await loadReceiptLogo();
+
+  return new Promise((resolve, reject) => {
     try {
       const items = getItems(order);
       const customer = getCustomer(order);
@@ -193,11 +207,31 @@ const drawFullReceipt = (order) =>
         });
       };
 
-      center('FLEURS', 48, COLORS.darkPink, '800');
-      center('by Blossoms Craft', 29, COLORS.text, '600');
+      // Draw the actual logo, cropping the empty margins from the square image.
+      // The logo artwork itself sits in the middle of public/logo.jpg
+      const logoSourceX = logo.naturalWidth * 0.06;
+      const logoSourceY = logo.naturalHeight * 0.34;
+      const logoSourceWidth = logo.naturalWidth * 0.88;
+      const logoSourceHeight = logo.naturalHeight * 0.36;
+      const logoWidth = 680;
+      const logoHeight = logoWidth * (logoSourceHeight / logoSourceWidth);
+
+      ctx.drawImage(
+        logo,
+        logoSourceX,
+        logoSourceY,
+        logoSourceWidth,
+        logoSourceHeight,
+        (width - logoWidth) / 2,
+        y - 20,
+        logoWidth,
+        logoHeight
+      );
+      y += logoHeight + 12;
+
       center(
         'OFFICIAL ORDER RECEIPT',
-        27,
+        30,
         COLORS.darkPink,
         '700'
       );
@@ -489,6 +523,7 @@ const drawFullReceipt = (order) =>
       reject(error);
     }
   });
+};
 
 // ===============================
 // ORDER CONFIRMATION PAGE
