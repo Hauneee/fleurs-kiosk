@@ -19,9 +19,9 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import {
   checkSupabaseConnection,
   supabase,
+  createOrder,
 } from './services/supabase';
 
-import { createOrder } from './services/orders';
 import { getPaymentInfo } from './utils/paymentInfo';
 import { Database } from 'lucide-react';
 import { formatPeso } from './utils/formatPeso';
@@ -33,6 +33,7 @@ import './styles/track.css';
 const MAX_ITEMS = 10;
 const CART_STORAGE_KEY = 'fleurs_kiosk_cart';
 const MAX_ITEMS_MESSAGE = 'Maximum order is only 10 items!';
+const CHECKOUT_KEY = 'fleurs_checkout_key';
 
 const EMPTY_CUSTOMER = {
   name: '',
@@ -45,16 +46,30 @@ const RATING_TOKEN = new URLSearchParams(
   window.location.search
 ).get('rate');
 
-const CHECKOUT_PAGES = [
-  'customer-info',
-  'payment',
-];
+const CHECKOUT_PAGES = ['customer-info', 'payment'];
 
 const getQuantity = (item) =>
   Math.max(0, Number(item.quantity) || 0);
 
 const getTotalItemCount = (items) =>
   items.reduce((sum, item) => sum + getQuantity(item), 0);
+
+const getCheckoutKey = () => {
+  let key = sessionStorage.getItem(CHECKOUT_KEY);
+
+  if (!key) {
+    if (typeof crypto?.randomUUID !== 'function') {
+      throw new Error(
+        'Secure checkout is unavailable in this browser. Please try again using a secure connection.'
+      );
+    }
+
+    key = crypto.randomUUID();
+    sessionStorage.setItem(CHECKOUT_KEY, key);
+  }
+
+  return key;
+};
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -178,7 +193,6 @@ export default function App() {
       ) * 100
     ) / 100;
 
-  // Add products without exceeding the 10-item cart limit.
   const handleAddToCart = (product, quantity = 1) => {
     const requestedQuantity = Number(quantity);
 
@@ -239,7 +253,6 @@ export default function App() {
     return true;
   };
 
-  // Update an existing cart item.
   const handleUpdateQuantity = (productId, newQuantity) => {
     const requestedQuantity = Number(newQuantity);
 
@@ -356,7 +369,7 @@ export default function App() {
     setCurrentPage('payment');
   };
 
-  // Order saved successfully: continue directly to Photo Proof.
+  // Save order successfully, then go straight to Photo Proof.
   const handleOrderSuccess = (orderData) => {
     if (supabase && orderData?.order_number) {
       supabase.functions
@@ -378,12 +391,15 @@ export default function App() {
     setAcceptedTerms(false);
 
     sessionStorage.removeItem(CART_STORAGE_KEY);
+    sessionStorage.removeItem(CHECKOUT_KEY);
+    sessionStorage.removeItem('fleurs_pay_ref');
+    sessionStorage.removeItem('fleurs_payment_method');
 
     setProofUrl('');
     setCurrentPage('proof');
   };
 
-  // Save the order directly from the single Payment page.
+  // Save the order directly from the Payment page.
   const handlePaymentComplete = async () => {
     if (isSavingOrder) return;
 
@@ -393,14 +409,28 @@ export default function App() {
       return;
     }
 
-    const paymentInfo = getPaymentInfo();
-    const isCash = paymentInfo.method === 'cash';
+    const paymentInfo = getPaymentInfo() || {};
+    const method = String(paymentInfo.method || '')
+      .trim()
+      .toLowerCase();
+
+    const isCash = method === 'cash';
     const amount = Number(cartTotal) || 0;
     const cashReceived = Number(paymentInfo.cashReceived) || 0;
     const change = Math.max(0, cashReceived - amount);
     const paidRef = sessionStorage.getItem('fleurs_pay_ref');
 
-    if (isCash && (amount <= 0 || cashReceived < amount)) {
+    if (amount <= 0) {
+      showToast('Your order total is invalid.');
+      return;
+    }
+
+    if (!['cash', 'gcash'].includes(method)) {
+      showToast('Please select Cash or GCash.');
+      return;
+    }
+
+    if (isCash && cashReceived < amount) {
       showToast('Please enter enough cash on the Payment page.');
       return;
     }
@@ -413,15 +443,19 @@ export default function App() {
     setIsSavingOrder(true);
 
     try {
-      const order = await createOrder({
-        cart,
-        customer: customerInfo,
-        totalAmount: amount,
-        amount_paid: isCash ? cashReceived : amount,
-        change_amount: isCash ? change : 0,
-        payment_method: isCash ? 'cash' : 'gcash',
-        payment_reference: isCash ? null : paidRef,
-      });
+      const idempotencyKey = getCheckoutKey();
+
+      const order = await createOrder(
+        {
+          customer: customerInfo,
+          total_amount: amount,
+          amount_paid: isCash ? cashReceived : amount,
+          change_amount: isCash ? change : 0,
+          payment_reference: isCash ? null : paidRef,
+          idempotency_key: idempotencyKey,
+        },
+        cart
+      );
 
       if (!order) {
         throw new Error('Unable to save the order. Please try again.');
@@ -449,6 +483,10 @@ export default function App() {
     setProofUrl('');
 
     sessionStorage.removeItem(CART_STORAGE_KEY);
+    sessionStorage.removeItem(CHECKOUT_KEY);
+    sessionStorage.removeItem('fleurs_pay_ref');
+    sessionStorage.removeItem('fleurs_payment_method');
+
     setCurrentPage('menu');
   };
 
@@ -572,7 +610,7 @@ export default function App() {
         />
       )}
 
-      {/* ONE PAYMENT PAGE ONLY */}
+      {/* Single Payment page: Cash or GCash. */}
       {currentPage === 'payment' && (
         <PaymentPage
           cart={cart}
@@ -582,7 +620,7 @@ export default function App() {
         />
       )}
 
-      {/* Payment succeeds and order is saved before this page opens. */}
+      {/* Opens only after payment succeeds and the order is saved. */}
       {currentPage === 'proof' && (
         <PhotoProofPage
           order={confirmedOrder}
@@ -593,6 +631,7 @@ export default function App() {
         />
       )}
 
+      {/* Final order completion page after Photo Proof. */}
       {currentPage === 'confirmation' && (
         <OrderConfirmationPage
           order={confirmedOrder}
