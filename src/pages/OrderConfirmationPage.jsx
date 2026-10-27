@@ -64,9 +64,9 @@ const loadReceiptLogo = () =>
     logo.onload = () => resolve(logo);
     logo.onerror = () =>
       reject(
-        new Error("Could not load public/logo.jpg. Make sure the file is named logo.jpg and is inside the public folder.")
+        new Error("Could not load public/logo.png. Make sure the file is named logo.png and is inside the public folder.")
       );
-    logo.src = `${import.meta.env.BASE_URL}logo.jpg`;
+    logo.src = `${import.meta.env.BASE_URL}logo.png`;
   });
 
 // ===============================
@@ -207,7 +207,7 @@ const drawFullReceipt = async (order) => {
       };
 
       // Draw the actual logo, cropping the empty margins from the square image.
-      // Crop the large empty margins around the artwork in public/logo.jpg.
+      // Crop the large empty margins around the artwork in public/logo.png.
       const logoSourceX = logo.naturalWidth * 0.06;
       const logoSourceY = logo.naturalHeight * 0.36;
       const logoSourceWidth = logo.naturalWidth * 0.88;
@@ -688,7 +688,7 @@ export const OrderConfirmationPage = ({
           }}
         >
           <img
-            src={`${import.meta.env.BASE_URL}logo.jpg`}
+            src={`${import.meta.env.BASE_URL}logo.png`}
             alt="Blossom’s Craft logo"
             onError={(event) => {
               event.currentTarget.style.display = 'none';
