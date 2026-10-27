@@ -784,7 +784,8 @@ export const PaymentPage = ({
                   ? 'Enter the cash received'
                   : cashEnough
                   ? `Change: ${formatPeso(change)}`
-                  : `Kulang pa: ${formatPeso(-change)}`}
+                  : `Still not enough
+: ${formatPeso(-change)}`}
               </div>
             </div>
           )}
