@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -11,6 +10,7 @@ import { formatPeso } from '../utils/formatPeso';
 import { getPaymentInfo } from '../utils/paymentInfo';
 
 const PAY_REF_KEY = 'fleurs_pay_ref';
+const IDEMPOTENCY_KEY = 'fleurs_checkout_idempotency_key';
 
 const COLORS = {
   pink: '#E879A5',
@@ -23,12 +23,29 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
+const getOrCreateIdempotencyKey = () => {
+  let key = sessionStorage.getItem(IDEMPOTENCY_KEY);
+
+  if (!key) {
+    if (!globalThis.crypto?.randomUUID) {
+      throw new Error(
+        'Secure checkout is unavailable in this browser. Please use an updated browser and try again.'
+      );
+    }
+
+    key = globalThis.crypto.randomUUID();
+    sessionStorage.setItem(IDEMPOTENCY_KEY, key);
+  }
+
+  return key;
+};
+
 export const PaymentConfirmationPage = ({
   cart,
   customer,
   totalAmount,
   onBack,
-  onOrderSuccess
+  onOrderSuccess,
 }) => {
   const isCash = getPaymentInfo().method === 'cash';
   const paidRef = sessionStorage.getItem(PAY_REF_KEY) || '';
@@ -43,7 +60,11 @@ export const PaymentConfirmationPage = ({
   }, []);
 
   const handleConfirm = async () => {
-    if (submittingRef.current || cart.length === 0 || !canSave) {
+    if (
+      submittingRef.current ||
+      cart.length === 0 ||
+      !canSave
+    ) {
       return;
     }
 
@@ -52,17 +73,92 @@ export const PaymentConfirmationPage = ({
     setErrorMessage(null);
 
     try {
+      const idempotencyKey = getOrCreateIdempotencyKey();
+
       const completedOrder = await createOrder(
         {
           total_amount: totalAmount,
           customer,
-          payment_reference: isCash ? 'CASH' : paidRef
+          payment_reference: isCash ? 'CASH' : paidRef,
+          idempotency_key: idempotencyKey,
         },
         cart
       );
 
-      sessionStorage.removeItem(PAY_REF_KEY);
-      onOrderSuccess(completedOrder);
+      // Clear only after the server confirms success.
+      // On failure, retain the key so a retry reuses it.
+      // First pass the successful order to App.jsx.
+
+
+// Clear checkout keys after the success callback.
+const handleConfirm = async () => {
+  if (
+    submittingRef.current ||
+    cart.length === 0 ||
+    !canSave
+  ) {
+    return;
+  }
+
+  submittingRef.current = true;
+  setIsSubmitting(true);
+  setErrorMessage(null);
+
+  let completedOrder;
+
+  try {
+    const idempotencyKey = getOrCreateIdempotencyKey();
+
+    completedOrder = await createOrder(
+      {
+        total_amount: totalAmount,
+        customer,
+        payment_reference: isCash ? 'CASH' : paidRef,
+        idempotency_key: idempotencyKey,
+      },
+      cart
+    );
+
+    if (!completedOrder?.order_number) {
+      throw new Error(
+        'The server did not return a valid order confirmation.'
+      );
+    }
+  } catch (err) {
+    console.error('Order confirmation failed:', err);
+
+    setErrorMessage(
+      err.message ||
+        'Unable to connect to the server. Please check the connection and try again.'
+    );
+
+    submittingRef.current = false;
+    setIsSubmitting(false);
+    return;
+  }
+
+  // The server has confirmed the order.
+  // Keep the submit lock active while navigating away.
+  try {
+    onOrderSuccess(completedOrder);
+  } catch (err) {
+    console.error(
+      'Order was created, but the confirmation callback failed:',
+      err
+    );
+
+    setErrorMessage(
+      'Your order may already be saved. Please do not submit a new order. Contact staff to verify your order number: ' +
+        completedOrder.order_number
+    );
+
+    // Do not clear the idempotency key or unlock retry here.
+    return;
+  }
+
+  sessionStorage.removeItem(PAY_REF_KEY);
+  sessionStorage.removeItem(IDEMPOTENCY_KEY);
+};
     } catch (err) {
       console.error('Order confirmation failed:', err);
 

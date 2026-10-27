@@ -1,9 +1,16 @@
-
 (() => {
   "use strict";
 
-  const SUPABASE_URL = "https://ylkrjvmwwuhitqmysrxf.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsa3Jqdm13d3VoaXRxbXlzcnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMjAyMTIsImV4cCI6MjEwNjU5NjIxMn0.CyrwrASzk3EAJ5ChSgSGExl0qffdXOHkzg1_o7lPCFA";
+  const SUPABASE_URL =
+    "https://ylkrjvmwwuhitqmysrxf.supabase.co";
+
+  const SUPABASE_ANON_KEY =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsa3Jqdm13d3VoaXRxbXlzcnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwMjAyMTIsImV4cCI6MjEwNjU5NjIxMn0.CyrwrASzk3EAJ5ChSgSGExl0qffdXOHkzg1_o7lPCFA";
+
+  const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
 
   const ORDERS_TABLE = "orders";
   const ITEMS_RELATION = "order_items";
@@ -16,12 +23,16 @@
   const SHOW_BRAND_TEXT = true;
 
   const LOW_MAX_UNITS = 2;
+
   const unitLevel = units =>
-    units <= 0 ? "none" : units <= LOW_MAX_UNITS ? "low" : "high";
+    units <= 0 ? "none" :
+    units <= LOW_MAX_UNITS ? "low" : "high";
 
   const DAY_MS = 86400000;
+
   const startOfDay = d =>
     new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
   const addDays = (d, n) =>
     new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
@@ -46,6 +57,7 @@
         return obj[key];
       }
     }
+
     return fallback;
   };
 
@@ -56,27 +68,31 @@
 
   const dateValue = value => {
     if (!value) return null;
+
     const d = new Date(value);
+
     return Number.isNaN(d.getTime()) ? null : d;
   };
 
   const dateText = value => {
-  const d = dateValue(value);
+    const d = dateValue(value);
 
-  return d ? d.toLocaleString("en-PH", {
-    timeZone: "Asia/Manila",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true
-  }) : "Not available";
-};
+    return d ? d.toLocaleString("en-PH", {
+      timeZone: "Asia/Manila",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }) : "Not available";
+  };
 
   const dateKey = value => {
     const d = dateValue(value);
+
     if (!d) return "";
+
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
@@ -111,56 +127,31 @@
   ], "");
 
   const PAY_METHOD_KEYS = [
-    "payment_method",
-    "payment_type",
-    "payment_channel",
-    "payment_source",
-    "mode_of_payment",
-    "payment_mode",
-    "payment_option",
-    "payment_provider",
-    "payment_method_name",
-    "paymentMethod",
-    "paymentMethodName",
-    "checkout_method",
-    "paymongo_method",
-    "method"
+    "payment_method", "payment_type", "payment_channel",
+    "payment_source", "mode_of_payment", "payment_mode",
+    "payment_option", "payment_provider", "payment_method_name",
+    "paymentMethod", "paymentMethodName", "checkout_method",
+    "paymongo_method", "method"
   ];
 
   const PAY_REF_KEYS = [
-    "payment_reference",
-    "payment_ref",
-    "paymongo_payment_id",
-    "paymongo_id",
-    "payment_intent_id"
+    "payment_reference", "payment_ref",
+    "paymongo_payment_id", "paymongo_id", "payment_intent_id"
   ];
 
   const TENDER_KEYS = [
-    "amount_tendered",
-    "cash_tendered",
-    "cash_received",
-    "cash_given",
-    "tendered_amount",
-    "amount_received",
-    "cash_amount"
+    "amount_tendered", "cash_tendered", "cash_received",
+    "cash_given", "tendered_amount", "amount_received", "cash_amount"
   ];
 
   const CHANGE_KEYS = [
-    "change_amount",
-    "change",
-    "change_due",
-    "exchange",
-    "exchange_amount",
-    "sukli",
-    "cash_change",
-    "change_given",
-    "change_returned"
+    "change_amount", "change", "change_due", "exchange",
+    "exchange_amount", "sukli", "cash_change",
+    "change_given", "change_returned"
   ];
 
   function normalizePaymentMethod(o) {
-    const value = first(o, PAY_METHOD_KEYS, "");
-
-    return String(value)
+    return String(first(o, PAY_METHOD_KEYS, ""))
       .trim()
       .toLowerCase()
       .replace(/[_-]+/g, " ")
@@ -172,11 +163,7 @@
 
     if (!raw) return "unknown";
 
-    if (
-      /\bg\s*cash\b/.test(raw) ||
-      /\bgcash\b/.test(raw) ||
-      /\bgcash\b/.test(raw.replace(/\s/g, ""))
-    ) {
+    if (/\bg\s*cash\b/.test(raw) || /\bgcash\b/.test(raw)) {
       return "gcash";
     }
 
@@ -213,50 +200,27 @@
     const t = first(o, TENDER_KEYS, null);
     const c = first(o, CHANGE_KEYS, null);
 
-    const tendered =
-      t === null ? null : Number(t);
+    const tendered = t === null ? null : Number(t);
+    let change = c === null ? null : Number(c);
 
-    let change =
-      c === null ? null : Number(c);
-
-    if (
-      change === null &&
-      Number.isFinite(tendered)
-    ) {
-      change = Math.max(
-        0,
-        tendered - totalOf(o)
-      );
+    if (change === null && Number.isFinite(tendered)) {
+      change = Math.max(0, tendered - totalOf(o));
     }
 
     return {
-      tendered: Number.isFinite(tendered)
-        ? tendered
-        : null,
-
-      change: Number.isFinite(change)
-        ? change
-        : null
+      tendered: Number.isFinite(tendered) ? tendered : null,
+      change: Number.isFinite(change) ? change : null
     };
   };
 
   const paymentBadge = o => {
     const kind = paymentKind(o);
-    const label = paymentMethod(o);
 
-    return `
-      <span class="badge pay-${esc(kind)}">
-        ${esc(label)}
-      </span>
-    `;
+    return `<span class="badge pay-${esc(kind)}">${esc(paymentMethod(o))}</span>`;
   };
 
   const paymentStatus = o =>
-    first(
-      o,
-      ["payment_status", "payment_state"],
-      "Not specified"
-    );
+    first(o, ["payment_status", "payment_state"], "Not specified");
 
   const proofValue = o => first(o, [
     "proof_photo_path", "proof_image_url", "proof_of_payment_url",
@@ -281,6 +245,7 @@
 
   const itemList = o => {
     const v = o[ITEMS_RELATION] ?? o.items ?? o.orderItems ?? [];
+
     return Array.isArray(v) ? v : [];
   };
 
@@ -314,14 +279,21 @@
 
   function notify(message, type = "info") {
     const el = $("toast");
+
     el.textContent = message;
+
     el.style.background =
       type === "error" ? "#a93f4c" :
       type === "success" ? "#347756" : "#36303b";
 
     el.classList.remove("hidden");
+
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.add("hidden"), 3600);
+
+    toastTimer = setTimeout(
+      () => el.classList.add("hidden"),
+      3600
+    );
   }
 
   function setGlobalMessage(message, type = "info") {
@@ -338,6 +310,7 @@
 
   function setAdminEmail(email) {
     const text = email || "Administrator";
+
     $("adminEmail").textContent = text;
     $("adminEmail").title = text;
     $("adminEmailFull").textContent = text;
@@ -352,6 +325,7 @@
     });
 
     const word = document.querySelector(".brand-wordmark");
+
     if (word) word.src = LOGO_TEXT_FILE;
 
     if (!SHOW_BRAND_TEXT) {
@@ -368,9 +342,11 @@
       try {
         const size = 64;
         const canvas = document.createElement("canvas");
+
         canvas.width = canvas.height = size;
 
         const ctx = canvas.getContext("2d");
+
         ctx.beginPath();
         ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
         ctx.closePath();
@@ -390,9 +366,11 @@
         document.querySelectorAll('link[rel~="icon"]').forEach(l => l.remove());
 
         const link = document.createElement("link");
+
         link.rel = "icon";
         link.type = "image/png";
         link.href = url;
+
         document.head.appendChild(link);
       } catch (error) {
         console.warn("Could not round the favicon:", error.message);
@@ -415,18 +393,34 @@
 
   function shortId(value) {
     const s = String(value ?? "");
+
     return s.length > 12 ? s.slice(0, 8) + "…" : s;
   }
 
+  // CUSTOMER GROUPING FIX
+  // Different names sharing one email remain separate customers.
   function customerKey(o) {
     const email = customerEmail(o).trim().toLowerCase();
-    if (email) return "email:" + email;
-
-    const phone = customerPhone(o).trim();
-    if (phone) return "phone:" + phone;
-
     const name = customerName(o).trim().toLowerCase();
-    return name !== "customer" ? "name:" + name : "";
+    const phone = customerPhone(o).trim();
+
+    if (email && name && name !== "customer") {
+      return `email:${email}|name:${name}`;
+    }
+
+    if (email) {
+      return `email:${email}`;
+    }
+
+    if (phone) {
+      return `phone:${phone}`;
+    }
+
+    if (name && name !== "customer") {
+      return `name:${name}`;
+    }
+
+    return "";
   }
 
   function uniqueCustomers(list) {
@@ -434,7 +428,10 @@
 
     list.forEach(o => {
       const key = customerKey(o);
-      if (key && !map.has(key)) map.set(key, o);
+
+      if (key && !map.has(key)) {
+        map.set(key, o);
+      }
     });
 
     return [...map.values()];
@@ -454,6 +451,7 @@
       .limit(5000);
 
     if (error) throw error;
+
     orders = data || [];
   }
 
@@ -462,11 +460,14 @@
 
     if (error) {
       feedback = [];
+
       console.warn("Ratings RPC unavailable:", error.message);
+
       return error.message;
     }
 
     feedback = Array.isArray(data) ? data : [];
+
     return "";
   }
 
@@ -478,7 +479,9 @@
 
     if (error) {
       products = [];
+
       console.warn("Products table unavailable:", error.message);
+
       return;
     }
 
@@ -491,7 +494,9 @@
 
     try {
       const results = await Promise.allSettled([
-        loadOrders(), loadFeedback(), loadProducts()
+        loadOrders(),
+        loadFeedback(),
+        loadProducts()
       ]);
 
       if (results[0].status === "rejected") {
@@ -507,6 +512,7 @@
       }
 
       renderAll();
+
       notify("Store data refreshed.", "success");
     } catch (error) {
       console.error(error);
@@ -524,9 +530,9 @@
   function showPage(page) {
     activePage = page;
 
-    document.querySelectorAll(".page").forEach(el => {
-      el.classList.add("hidden");
-    });
+    document.querySelectorAll(".page").forEach(el =>
+      el.classList.add("hidden")
+    );
 
     $("page-" + page)?.classList.remove("hidden");
 
@@ -543,6 +549,7 @@
     };
 
     $("topTitle").textContent = titles[page] || "Dashboard";
+
     $("sidebar").classList.remove("open");
 
     if (page === "orders") renderOrders();
@@ -565,6 +572,7 @@
     );
 
     $("statOrders").textContent = orders.length.toLocaleString();
+
     $("statCustomers").textContent =
       uniqueCustomers(orders).length.toLocaleString();
 
@@ -573,7 +581,10 @@
       .filter(n => n > 0 && n <= 5);
 
     $("statRating").textContent = validRatings.length
-      ? (validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1) + " ★"
+      ? (
+          validRatings.reduce((a, b) => a + b, 0) /
+          validRatings.length
+        ).toFixed(1) + " ★"
       : "—";
 
     $("statReviewCount").textContent =
@@ -584,8 +595,8 @@
     $("statusBreakdown").innerHTML = orders.length
       ? `<div class="bar-row">
           <div class="row between">
-            <span>${statusBadge()}</span>
-            <strong>${orders.length}</strong>
+            <strong>${orders.length.toLocaleString()}</strong>
+            ${statusBadge()}
           </div>
           <div class="bar-track">
             <div class="bar-fill" style="width:100%"></div>
@@ -601,8 +612,10 @@
   function renderDashboardChart() {
     const range = rangeFor(dashType, dashAnchor);
     const list = reportOrders(range);
+
     const total = list.reduce((sum, o) => sum + totalOf(o), 0);
     const units = list.reduce((sum, o) => sum + orderUnits(o), 0);
+
     const buckets = buildBuckets(range, list);
 
     drawChart("dashboardChart", buckets, buckets.length > 10);
@@ -613,6 +626,7 @@
       `<strong>${esc(money(total))}</strong> · ${list.length} order(s) · ${units} item(s) sold`;
 
     $("dashboardChartNote").textContent = range.note;
+
     $("dashNext").disabled = range.end.getTime() > Date.now();
 
     document.querySelectorAll("#dashPeriodSeg button").forEach(btn => {
@@ -633,26 +647,32 @@
     }
 
     dashAnchor = a;
+
     renderDashboardChart();
   }
 
   function drawChart(targetId, data, dense = false) {
     const el = $(targetId);
+
     el.classList.toggle("dense", dense);
 
     if (!data.length) {
       el.innerHTML =
         `<div class="empty" style="width:100%">No sales data available.</div>`;
+
       return;
     }
 
-    const max = Math.max(...data.map(d => Number(d.value) || 0), 1);
+    const max = Math.max(
+      ...data.map(d => Number(d.value) || 0),
+      1
+    );
 
     el.innerHTML = data.map(d => {
       const v = Number(d.value) || 0;
       const u = Number(d.units) || 0;
       const level = unitLevel(u);
-      const height = Math.max(v > 0 ? 5 : 1, (v / max) * 150);
+      const height = Math.max(v > 0 ? 5 : 1, (v / max) * 230);
       const shown = v ? esc(compactMoney(v)) : (dense ? "" : "—");
 
       return `<div class="chart-col" title="${esc(d.tip || d.label)}: ${esc(money(v))} · ${u} item(s) sold">
@@ -665,8 +685,10 @@
 
   function compactMoney(v) {
     const n = Number(v) || 0;
+
     if (n >= 1000000) return "₱" + (n / 1000000).toFixed(1) + "m";
     if (n >= 1000) return "₱" + (n / 1000).toFixed(1) + "k";
+
     return "₱" + Math.round(n);
   }
 
@@ -708,7 +730,10 @@
 
     const filtered = sortOrders(orders).filter(o => {
       const haystack = [
-        orderNumber(o), customerName(o), customerEmail(o), customerPhone(o)
+        orderNumber(o),
+        customerName(o),
+        customerEmail(o),
+        customerPhone(o)
       ].join(" ").toLowerCase();
 
       return (!search || haystack.includes(search)) &&
@@ -735,6 +760,7 @@
       }
 
       const c = grouped.get(key);
+
       c.count++;
       c.total += totalOf(o);
 
@@ -748,8 +774,12 @@
 
     const list = [...grouped.values()].filter(c => {
       const o = c.order;
-      return [customerName(o), customerEmail(o), customerPhone(o)]
-        .join(" ").toLowerCase().includes(search);
+
+      return [
+        customerName(o),
+        customerEmail(o),
+        customerPhone(o)
+      ].join(" ").toLowerCase().includes(search);
     });
 
     $("customersTable").innerHTML = list.length
@@ -780,8 +810,11 @@
 
     const dated = feedback.filter(r => {
       if (!from && !to) return true;
+
       const key = dateKey(reviewDate(r));
+
       if (!key) return false;
+
       return (!from || key >= from) && (!to || key <= to);
     });
 
@@ -792,7 +825,10 @@
     $("feedbackTotal").textContent = dated.length;
 
     $("feedbackAverage").textContent = validRatings.length
-      ? (validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1) + " ★"
+      ? (
+          validRatings.reduce((a, b) => a + b, 0) /
+          validRatings.length
+        ).toFixed(1) + " ★"
       : "—";
 
     $("feedbackFive").textContent =
@@ -806,7 +842,9 @@
 
     const filtered = [...dated].filter(r => {
       const text = [
-        reviewName(r), reviewOrder(r), reviewComment(r)
+        reviewName(r),
+        reviewOrder(r),
+        reviewComment(r)
       ].join(" ").toLowerCase();
 
       return (!search || text.includes(search)) &&
@@ -841,6 +879,7 @@
 
   const orderUnits = o => {
     const items = itemList(o);
+
     return items.length
       ? items.reduce((sum, i) => sum + itemQty(i), 0)
       : 1;
@@ -858,7 +897,10 @@
         start,
         end: addDays(start, 1),
         label: fmt(start, {
-          weekday: "long", year: "numeric", month: "long", day: "numeric"
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric"
         }),
         tag: dateKey(start),
         chartTitle: "Hourly sales",
@@ -921,6 +963,7 @@
   function reportOrders(range) {
     return sortOrders(orders).filter(o => {
       const d = dateValue(createdOf(o));
+
       return d && d >= range.start && d < range.end;
     });
   }
@@ -944,7 +987,9 @@
         return {
           label: d.toLocaleDateString("en-PH", { weekday: "short" }),
           tip: d.toLocaleDateString("en-PH", {
-            weekday: "long", month: "short", day: "numeric"
+            weekday: "long",
+            month: "short",
+            day: "numeric"
           }),
           value: 0,
           units: 0
@@ -959,7 +1004,8 @@
         return {
           label: String(i + 1),
           tip: d.toLocaleDateString("en-PH", {
-            month: "short", day: "numeric"
+            month: "short",
+            day: "numeric"
           }),
           value: 0,
           units: 0
@@ -977,6 +1023,7 @@
           : d.getDate() - 1;
 
       const b = buckets[idx];
+
       if (!b) return;
 
       b.value += totalOf(o);
@@ -1002,6 +1049,7 @@
 
     const range = getReportRange();
     const list = reportOrders(range);
+
     const total = list.reduce((sum, o) => sum + totalOf(o), 0);
     const unitsSold = list.reduce((sum, o) => sum + orderUnits(o), 0);
 
@@ -1015,6 +1063,7 @@
     $("reportChartNote").textContent = range.note;
 
     const buckets = buildBuckets(range, list);
+
     drawChart("reportChart", buckets, buckets.length > 10);
 
     const sellers = {};
@@ -1062,10 +1111,9 @@
   }
 
   function detailField(label, value) {
-    const shown =
-      value === "" || value === null || value === undefined
-        ? "Not available"
-        : value;
+    const shown = value === "" || value === null || value === undefined
+      ? "Not available"
+      : value;
 
     return `<div class="detail-field">
       <div class="label">${esc(label)}</div>
@@ -1077,15 +1125,21 @@
 
   function allFieldsSection(o) {
     const exclude = new Set([
-      ITEMS_RELATION, "items", "orderItems",
-      "tracking_number", "tracking_no", "tracking_code"
+      ITEMS_RELATION,
+      "items",
+      "orderItems",
+      "tracking_number",
+      "tracking_no",
+      "tracking_code"
     ]);
 
     const fields = Object.entries(o).filter(([key, value]) =>
       !exclude.has(key) &&
       !HIDDEN_FIELD.test(key) &&
-      (value === null ||
-        ["string", "number", "boolean"].includes(typeof value))
+      (
+        value === null ||
+        ["string", "number", "boolean"].includes(typeof value)
+      )
     );
 
     if (!fields.length) return "";
@@ -1107,6 +1161,7 @@
     if (!value || typeof value !== "string") return "";
 
     const raw = value.trim();
+
     if (/^https?:\/\//i.test(raw)) return raw;
     if (!PROOF_BUCKET || !sb) return "";
 
@@ -1114,9 +1169,7 @@
       .replace(/^\/+/, "")
       .replace(/^proofs\//, "");
 
-    const { data } = sb.storage
-      .from(PROOF_BUCKET)
-      .getPublicUrl(path);
+    const { data } = sb.storage.from(PROOF_BUCKET).getPublicUrl(path);
 
     return data?.publicUrl || "";
   }
@@ -1152,20 +1205,14 @@
         <div class="proof-card">
           <strong>Proof of payment</strong>
           <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">
-            <img
-              src="${esc(url)}"
-              alt="Proof of payment"
-              loading="lazy"
+            <img src="${esc(url)}" alt="Proof of payment" loading="lazy"
               style="max-width:100%;max-height:400px;object-fit:contain;"
-              onerror="this.style.display='none';this.nextElementSibling.classList.remove('hidden')"
-            >
+              onerror="this.style.display='none';this.nextElementSibling.classList.remove('hidden')">
             <div class="proof-placeholder hidden">
               Image could not be loaded. Check Storage permissions or the image path.
             </div>
           </a>
-          <div class="small muted wrap" style="margin-top:8px">
-            ${esc(raw)}
-          </div>
+          <div class="small muted wrap" style="margin-top:8px">${esc(raw)}</div>
         </div>
       </div>
     </div>`;
@@ -1197,7 +1244,12 @@
         </div>`;
 
     const total = totalOf(o);
-    const subtotal = items.reduce((sum, i) => sum + itemSubtotal(i), 0);
+
+    const subtotal = items.reduce(
+      (sum, i) => sum + itemSubtotal(i),
+      0
+    );
+
     const cash = paymentKind(o) === "cash" ? cashInfo(o) : null;
 
     const cashLines = cash ? `
@@ -1226,7 +1278,6 @@
           Order status is displayed as Completed in this admin view. Status editing is disabled here.
         </div>
       </div>
-
       <div class="detail-section">
         <h3>Customer information</h3>
         <div class="detail-grid">
@@ -1239,7 +1290,6 @@
           ${detailField("Order status", "Completed")}
         </div>
       </div>
-
       <div class="detail-section">
         <h3>Items ordered</h3>
         <div class="card" style="padding:0 15px">${itemsHtml}</div>
@@ -1255,53 +1305,80 @@
           ${cashLines}
         </div>
       </div>
-
       ${proofSection(o)}
-
       <div class="detail-section">
         <h3>Additional information</h3>
         <div class="detail-grid">
           ${detailField("Order ID", o.id)}
           ${detailField("Order reference", orderNumber(o))}
-          ${detailField("Notes / instructions", first(o, [
-            "notes", "order_notes", "special_instructions", "customer_note"
-          ], ""))}
-          ${detailField("Cancellation reason", first(o, [
-            "cancellation_reason", "cancel_reason"
-          ], ""))}
+          ${detailField("Notes / instructions", first(o, ["notes", "order_notes", "special_instructions", "customer_note"], ""))}
+          ${detailField("Cancellation reason", first(o, ["cancellation_reason", "cancel_reason"], ""))}
         </div>
       </div>
-
       ${allFieldsSection(o)}
     `;
 
     $("orderModal").classList.remove("hidden");
   }
 
+  // END OF PART 1
+  // Continue directly with PART 2 below.
+    // PRODUCT CATEGORIES
   const PRODUCT_CATEGORIES = ["Solo", "Triple", "Bouquet"];
 
-  const categoryOf = i => {
-    const text = (
-      String(first(i, ["category", "product_category", "type"], "")) +
-      " " + itemName(i)
-    ).toLowerCase();
+  const categoryFromValue = value => {
+    const category = String(value ?? "")
+      .toLowerCase()
+      .trim()
+      .replace(/[_\s]+/g, "-");
 
-    return PRODUCT_CATEGORIES.find(c =>
-      text.includes(c.toLowerCase())
-    ) || "Other";
+    if (category === "solo" || category === "solo-flower") return "Solo";
+    if (category === "triple" || category === "triple-flower") return "Triple";
+    if (category === "bouquet") return "Bouquet";
+
+    return "Other";
   };
 
+  const categoryOf = (item, categoryLookup) => {
+    const direct = categoryFromValue(first(item, [
+      "category", "product_category", "type", "product_type"
+    ], ""));
+
+    if (direct !== "Other") return direct;
+
+    const productId = first(item, ["product_id", "productId"], "");
+
+    if (
+      productId !== "" &&
+      categoryLookup.has(String(productId))
+    ) {
+      return categoryLookup.get(String(productId));
+    }
+
+    return "Other";
+  };
+
+  // EXCEL REPORT EXPORT
   async function exportReport() {
-    if (!window.ExcelJS) {
-      notify("Excel export library failed to load. Check your internet connection.", "error");
+    if (typeof ExcelJS === "undefined") {
+      notify("ExcelJS did not load. Check the ExcelJS script in admin.html.", "error");
       return;
     }
 
     const range = getReportRange();
-    const typeName = range.type[0].toUpperCase() + range.type.slice(1);
+    const typeName = range.type.charAt(0).toUpperCase() + range.type.slice(1);
     const list = reportOrders(range);
     const total = list.reduce((sum, o) => sum + totalOf(o), 0);
     const unitsSold = list.reduce((sum, o) => sum + orderUnits(o), 0);
+
+    const productCategoryMap = new Map(
+      (Array.isArray(products) ? products : []).map(p => [
+        String(p.id ?? ""),
+        categoryFromValue(first(p, [
+          "category", "product_category", "type", "product_type"
+        ], ""))
+      ])
+    );
 
     const PINK = "FFD98D9F";
     const PINK_LIGHT = "FFF9E9ED";
@@ -1309,68 +1386,80 @@
     const MUTED = "FF898184";
     const line = { style: "thin", color: { argb: "FFEEE7E6" } };
     const borders = { top: line, left: line, bottom: line, right: line };
+
     const zebra = {
       type: "pattern",
       pattern: "solid",
       fgColor: { argb: "FFFCFAF9" }
     };
+
     const PESO = '"₱"#,##0.00';
     const DATE_FMT = "mmm d, yyyy h:mm AM/PM";
 
     const styleHeader = row => {
       row.eachCell(c => {
         c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+
         c.fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: PINK }
         };
+
         c.alignment = {
           vertical: "middle",
           horizontal: "center"
         };
+
         c.border = borders;
       });
+
       row.height = 24;
     };
 
     const styleTotal = row => {
       row.eachCell(c => {
         c.font = { bold: true, color: { argb: INK } };
+
         c.fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: PINK_LIGHT }
         };
+
         c.border = borders;
       });
     };
 
     const writeTable = (ws, startRow, headers, rows, fmts = [], aligns = []) => {
-      const h = ws.getRow(startRow);
+      const header = ws.getRow(startRow);
 
-      headers.forEach((t, i) => {
-        h.getCell(i + 1).value = t;
+      headers.forEach((value, index) => {
+        header.getCell(index + 1).value = value;
       });
 
-      styleHeader(h);
+      styleHeader(header);
 
-      rows.forEach((r, ri) => {
-        const row = ws.getRow(startRow + 1 + ri);
+      rows.forEach((values, rowIndex) => {
+        const row = ws.getRow(startRow + 1 + rowIndex);
 
-        r.forEach((v, i) => {
-          const c = row.getCell(i + 1);
-          c.value = v;
+        values.forEach((value, columnIndex) => {
+          const cell = row.getCell(columnIndex + 1);
 
-          if (fmts[i]) c.numFmt = fmts[i];
+          cell.value = value;
 
-          c.border = borders;
-          c.alignment = {
+          if (fmts[columnIndex]) {
+            cell.numFmt = fmts[columnIndex];
+          }
+
+          cell.border = borders;
+
+          cell.alignment = {
             vertical: "middle",
-            horizontal: aligns[i] || undefined
+            horizontal: aligns[columnIndex] || undefined
           };
 
-          if (ri % 2) c.fill = zebra;
+          if (rowIndex % 2) cell.fill = zebra;
         });
       });
 
@@ -1378,9 +1467,11 @@
     };
 
     const sectionTitle = (ws, rowNum, text) => {
-      const c = ws.getRow(rowNum).getCell(1);
-      c.value = text;
-      c.font = {
+      const cell = ws.getRow(rowNum).getCell(1);
+
+      cell.value = text;
+
+      cell.font = {
         bold: true,
         size: 12,
         color: { argb: INK }
@@ -1388,71 +1479,79 @@
     };
 
     const setWidths = (ws, widths) => {
-      widths.forEach((w, i) => {
-        ws.getColumn(i + 1).width = w;
+      widths.forEach((width, index) => {
+        ws.getColumn(index + 1).width = width;
       });
     };
 
     const catTotals = new Map(
-      PRODUCT_CATEGORIES.map(c => [c, { qty: 0, sales: 0 }])
+      PRODUCT_CATEGORIES.map(category => [
+        category,
+        { qty: 0, sales: 0 }
+      ])
     );
 
     const productMap = new Map();
     const itemRows = [];
 
-    list.forEach(o => itemList(o).forEach(i => {
-      const cat = categoryOf(i);
-      const name = itemName(i);
-      const qty = itemQty(i);
-      const sub = itemSubtotal(i);
+    list.forEach(order => {
+      itemList(order).forEach(item => {
+        const category = categoryOf(item, productCategoryMap);
+        const name = itemName(item);
+        const qty = itemQty(item);
+        const subtotal = itemSubtotal(item);
 
-      if (!catTotals.has(cat)) {
-        catTotals.set(cat, { qty: 0, sales: 0 });
-      }
+        if (!catTotals.has(category)) {
+          catTotals.set(category, { qty: 0, sales: 0 });
+        }
 
-      catTotals.get(cat).qty += qty;
-      catTotals.get(cat).sales += sub;
+        catTotals.get(category).qty += qty;
+        catTotals.get(category).sales += subtotal;
 
-      const key = cat + "||" + name;
+        const key = category + "||" + name;
 
-      if (!productMap.has(key)) {
-        productMap.set(key, {
-          cat,
+        if (!productMap.has(key)) {
+          productMap.set(key, {
+            category,
+            name,
+            qty: 0,
+            sales: 0
+          });
+        }
+
+        const product = productMap.get(key);
+
+        product.qty += qty;
+        product.sales += subtotal;
+
+        itemRows.push([
+          shortId(orderNumber(order)),
+          dateValue(createdOf(order)),
+          customerName(order),
+          category,
           name,
-          qty: 0,
-          sales: 0
-        });
-      }
+          qty,
+          itemPrice(item),
+          subtotal
+        ]);
+      });
+    });
 
-      productMap.get(key).qty += qty;
-      productMap.get(key).sales += sub;
-
-      itemRows.push([
-        shortId(orderNumber(o)),
-        dateValue(createdOf(o)),
-        customerName(o),
-        cat,
-        name,
-        qty,
-        itemPrice(i),
-        sub
-      ]);
-    }));
-
-    const catOrder = [...PRODUCT_CATEGORIES, "Other"];
+    const categoryOrder = [...PRODUCT_CATEGORIES, "Other"];
 
     const productRows = [...productMap.values()]
       .sort((a, b) =>
-        (catOrder.indexOf(a.cat) - catOrder.indexOf(b.cat)) ||
+        (categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category)) ||
         (b.qty - a.qty)
       )
-      .map(p => [p.cat, p.name, p.qty, p.sales]);
+      .map(p => [p.category, p.name, p.qty, p.sales]);
 
     const wb = new ExcelJS.Workbook();
+
     wb.creator = "Fleurs Kiosk";
     wb.created = new Date();
 
-    // Sheet 1: Summary
+    // SHEET 1: SUMMARY
     const sm = wb.addWorksheet("Summary", {
       views: [{ showGridLines: false }]
     });
@@ -1461,16 +1560,19 @@
 
     sm.mergeCells("A1:D1");
     sm.getCell("A1").value = `Fleurs Kiosk · ${typeName} Sales Report`;
+
     sm.getCell("A1").font = {
       name: "Georgia",
       bold: true,
       size: 18,
       color: { argb: INK }
     };
+
     sm.getRow(1).height = 32;
 
     sm.mergeCells("A2:D2");
     sm.getCell("A2").value = range.label;
+
     sm.getCell("A2").font = {
       size: 13,
       bold: true,
@@ -1480,6 +1582,7 @@
     sm.mergeCells("A3:D3");
     sm.getCell("A3").value =
       "Generated " + new Date().toLocaleString("en-PH");
+
     sm.getCell("A3").font = {
       size: 10,
       color: { argb: MUTED }
@@ -1496,102 +1599,121 @@
     ];
 
     const kh = sm.getRow(6);
+
     kh.getCell(1).value = "Metric";
     kh.getCell(2).value = "Value";
+
     styleHeader(kh);
 
-    kpis.forEach(([label, value, fmt], idx) => {
-      const row = sm.getRow(7 + idx);
+    kpis.forEach(([label, value, format], index) => {
+      const row = sm.getRow(7 + index);
 
       row.getCell(1).value = label;
       row.getCell(2).value = value;
-      row.getCell(2).numFmt = fmt;
+      row.getCell(2).numFmt = format;
       row.getCell(2).alignment = { horizontal: "right" };
       row.getCell(1).font = { bold: true };
 
-      [1, 2].forEach(n => {
-        row.getCell(n).border = borders;
-        if (idx % 2) row.getCell(n).fill = zebra;
+      [1, 2].forEach(column => {
+        row.getCell(column).border = borders;
+
+        if (index % 2) {
+          row.getCell(column).fill = zebra;
+        }
       });
     });
 
-    let r = 7 + kpis.length + 2;
+    let rowNum = 7 + kpis.length + 2;
 
-    sectionTitle(sm, r, "What was sold (by type)");
+    sectionTitle(sm, rowNum, "What was sold (by type)");
 
     const catRows = [...catTotals.entries()]
-      .filter(([name, v]) =>
-        PRODUCT_CATEGORIES.includes(name) || v.qty > 0
+      .filter(([name, values]) =>
+        PRODUCT_CATEGORIES.includes(name) || values.qty > 0
       )
-      .map(([name, v]) => [name, v.qty, v.sales]);
+      .map(([name, values]) => [name, values.qty, values.sales]);
 
-    r = writeTable(
+    rowNum = writeTable(
       sm,
-      r + 1,
+      rowNum + 1,
       ["Type", "Items sold", "Sales"],
       catRows,
       [null, "#,##0", PESO],
       [null, "right", "right"]
     );
 
-    const tr = sm.getRow(r);
-    tr.getCell(1).value = "Total";
-    tr.getCell(2).value = catRows.reduce((s, x) => s + x[1], 0);
-    tr.getCell(3).value = catRows.reduce((s, x) => s + x[2], 0);
-    tr.getCell(2).numFmt = "#,##0";
-    tr.getCell(3).numFmt = PESO;
-    tr.getCell(2).alignment = { horizontal: "right" };
-    tr.getCell(3).alignment = { horizontal: "right" };
-    styleTotal(tr);
+    const categoryTotalRow = sm.getRow(rowNum);
 
-    r += 2;
-    sectionTitle(sm, r, "How customers paid");
+    categoryTotalRow.getCell(1).value = "Total";
+
+    categoryTotalRow.getCell(2).value =
+      catRows.reduce((sum, values) => sum + values[1], 0);
+
+    categoryTotalRow.getCell(3).value =
+      catRows.reduce((sum, values) => sum + values[2], 0);
+
+    categoryTotalRow.getCell(2).numFmt = "#,##0";
+    categoryTotalRow.getCell(3).numFmt = PESO;
+
+    categoryTotalRow.getCell(2).alignment = { horizontal: "right" };
+    categoryTotalRow.getCell(3).alignment = { horizontal: "right" };
+
+    styleTotal(categoryTotalRow);
+
+    rowNum += 2;
+
+    sectionTitle(sm, rowNum, "How customers paid");
 
     const payMap = new Map([
       ["GCash", { n: 0, sales: 0 }],
       ["Cash", { n: 0, sales: 0 }]
     ]);
 
-    list.forEach(o => {
-      const label = paymentMethod(o);
+    list.forEach(order => {
+      const label = paymentMethod(order);
 
       if (!payMap.has(label)) {
         payMap.set(label, { n: 0, sales: 0 });
       }
 
       payMap.get(label).n += 1;
-      payMap.get(label).sales += totalOf(o);
+      payMap.get(label).sales += totalOf(order);
     });
 
-    const payRows = [...payMap.entries()].map(([label, v]) => [
-      label, v.n, v.sales
+    const payRows = [...payMap.entries()].map(([label, values]) => [
+      label,
+      values.n,
+      values.sales
     ]);
 
-    r = writeTable(
+    rowNum = writeTable(
       sm,
-      r + 1,
+      rowNum + 1,
       ["Payment method", "Orders", "Sales"],
       payRows,
       [null, "#,##0", PESO],
       [null, "right", "right"]
     );
 
-    r += 1;
-    sm.mergeCells(`A${r}:D${r}`);
-    sm.getCell(`A${r}`).value =
+    rowNum += 1;
+
+    sm.mergeCells(`A${rowNum}:D${rowNum}`);
+
+    sm.getCell(`A${rowNum}`).value =
       "Order status is shown as Completed in this admin view. Sales total adds up the total of every order in the period.";
-    sm.getCell(`A${r}`).font = {
+
+    sm.getCell(`A${rowNum}`).font = {
       italic: true,
       size: 9,
       color: { argb: MUTED }
     };
 
-    // Sheet 2: Products Sold
+    // SHEET 2: PRODUCTS SOLD
     const ps = wb.addWorksheet("Products Sold");
 
     setWidths(ps, [14, 38, 12, 18]);
 
-    let nr = writeTable(
+    let nextRow = writeTable(
       ps,
       1,
       ["Type", "Product", "Qty sold", "Sales"],
@@ -1604,26 +1726,33 @@
       ps.getRow(2).getCell(1).value =
         "No item-level sales found for this period.";
     } else {
-      const t = ps.getRow(nr);
+      const totalRow = ps.getRow(nextRow);
 
-      t.getCell(1).value = "Total";
-      t.getCell(3).value = productRows.reduce((s, x) => s + x[2], 0);
-      t.getCell(4).value = productRows.reduce((s, x) => s + x[3], 0);
-      t.getCell(3).numFmt = "#,##0";
-      t.getCell(4).numFmt = PESO;
-      t.getCell(3).alignment = { horizontal: "right" };
-      t.getCell(4).alignment = { horizontal: "right" };
+      totalRow.getCell(1).value = "Total";
 
-      styleTotal(t);
+      totalRow.getCell(3).value =
+        productRows.reduce((sum, values) => sum + values[2], 0);
+
+      totalRow.getCell(4).value =
+        productRows.reduce((sum, values) => sum + values[3], 0);
+
+      totalRow.getCell(3).numFmt = "#,##0";
+      totalRow.getCell(4).numFmt = PESO;
+
+      totalRow.getCell(3).alignment = { horizontal: "right" };
+      totalRow.getCell(4).alignment = { horizontal: "right" };
+
+      styleTotal(totalRow);
     }
 
     ps.views = [{ state: "frozen", ySplit: 1 }];
+
     ps.autoFilter = {
       from: { row: 1, column: 1 },
       to: { row: 1, column: 4 }
     };
 
-    // Sheet 3: Sales Breakdown
+    // SHEET 3: SALES BREAKDOWN
     const bd = wb.addWorksheet("Sales Breakdown");
 
     setWidths(bd, [20, 12, 14, 18, 14]);
@@ -1642,15 +1771,15 @@
       high: { fill: "FFE6EFFF", font: "FF3863A7" }
     };
 
-    const bRows = buckets.map(b => [
-      b.tip,
-      b.orders || 0,
-      b.units,
-      b.value,
-      levelText[unitLevel(b.units)]
+    const breakdownRows = buckets.map(bucket => [
+      bucket.tip,
+      bucket.orders || 0,
+      bucket.units,
+      bucket.value,
+      levelText[unitLevel(bucket.units)]
     ]);
 
-    nr = writeTable(
+    nextRow = writeTable(
       bd,
       1,
       [
@@ -1660,66 +1789,77 @@
         "Sales",
         "Level"
       ],
-      bRows,
+      breakdownRows,
       [null, "#,##0", "#,##0", PESO, null],
       [null, "right", "right", "right", "center"]
     );
 
-    buckets.forEach((b, idx) => {
-      const c = bd.getRow(2 + idx).getCell(5);
-      const st = levelStyle[unitLevel(b.units)];
+    buckets.forEach((bucket, index) => {
+      const cell = bd.getRow(2 + index).getCell(5);
+      const style = levelStyle[unitLevel(bucket.units)];
 
-      c.fill = {
+      cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: st.fill }
+        fgColor: { argb: style.fill }
       };
 
-      c.font = {
+      cell.font = {
         bold: true,
-        color: { argb: st.font }
+        color: { argb: style.font }
       };
     });
 
-    const bt = bd.getRow(nr);
-    bt.getCell(1).value = "Total";
-    bt.getCell(2).value = list.length;
-    bt.getCell(3).value = unitsSold;
-    bt.getCell(4).value = total;
-    bt.getCell(2).numFmt = "#,##0";
-    bt.getCell(3).numFmt = "#,##0";
-    bt.getCell(4).numFmt = PESO;
+    const breakdownTotal = bd.getRow(nextRow);
 
-    [2, 3, 4].forEach(n => {
-      bt.getCell(n).alignment = { horizontal: "right" };
+    breakdownTotal.getCell(1).value = "Total";
+    breakdownTotal.getCell(2).value = list.length;
+    breakdownTotal.getCell(3).value = unitsSold;
+    breakdownTotal.getCell(4).value = total;
+
+    breakdownTotal.getCell(2).numFmt = "#,##0";
+    breakdownTotal.getCell(3).numFmt = "#,##0";
+    breakdownTotal.getCell(4).numFmt = PESO;
+
+    [2, 3, 4].forEach(column => {
+      breakdownTotal.getCell(column).alignment = {
+        horizontal: "right"
+      };
     });
 
-    styleTotal(bt);
+    styleTotal(breakdownTotal);
+
     bd.views = [{ state: "frozen", ySplit: 1 }];
 
-    // Sheet 4: Transactions
+    // SHEET 4: TRANSACTIONS
     const tx = wb.addWorksheet("Transactions");
 
     setWidths(tx, [
       14, 22, 24, 28, 16, 18, 44, 16, 16, 16, 16, 38
     ]);
 
-    const txRows = list.map(o => [
-      shortId(orderNumber(o)),
-      dateValue(createdOf(o)),
-      customerName(o),
-      customerEmail(o),
-      customerPhone(o),
-      paymentMethod(o),
-      itemList(o).map(i => `${itemName(i)} ×${itemQty(i)}`).join(", ") || "—",
-      paymentStatus(o),
-      totalOf(o),
-      paymentKind(o) === "cash" ? (cashInfo(o).tendered ?? "") : "",
-      paymentKind(o) === "cash" ? (cashInfo(o).change ?? "") : "",
-      o.id ?? ""
+    const transactionRows = list.map(order => [
+      shortId(orderNumber(order)),
+      dateValue(createdOf(order)),
+      customerName(order),
+      customerEmail(order),
+      customerPhone(order),
+      paymentMethod(order),
+      itemList(order).map(item =>
+        `${itemName(item)} ×${itemQty(item)}`
+      ).join(", ") || "—",
+      paymentStatus(order),
+      totalOf(order),
+      paymentKind(order) === "cash"
+        ? (cashInfo(order).tendered ?? "")
+        : "",
+      paymentKind(order) === "cash"
+        ? (cashInfo(order).change ?? "")
+        : "",
+      order.id ?? ""
     ]);
 
-    nr = writeTable(
+    nextRow = writeTable(
       tx,
       1,
       [
@@ -1727,33 +1867,43 @@
         "Payment", "Items ordered", "Payment status", "Total",
         "Cash received", "Change", "Order ID"
       ],
-      txRows,
-      [null, DATE_FMT, null, null, null, null, null, null, PESO, PESO, PESO, null],
-      [null, null, null, null, null, null, null, null, "right", "right", "right", null]
+      transactionRows,
+      [
+        null, DATE_FMT, null, null, null, null,
+        null, null, PESO, PESO, PESO, null
+      ],
+      [
+        null, null, null, null, null, null,
+        null, null, "right", "right", "right", null
+      ]
     );
 
-    if (txRows.length) {
-      const t = tx.getRow(nr);
+    if (transactionRows.length) {
+      const totalRow = tx.getRow(nextRow);
 
-      t.getCell(1).value = "Total";
-      t.getCell(9).value = total;
-      t.getCell(9).numFmt = PESO;
-      t.getCell(9).alignment = { horizontal: "right" };
+      totalRow.getCell(1).value = "Total";
+      totalRow.getCell(9).value = total;
+      totalRow.getCell(9).numFmt = PESO;
 
-      for (let n = 1; n <= 12; n++) {
-        t.getCell(n).border = borders;
+      totalRow.getCell(9).alignment = {
+        horizontal: "right"
+      };
+
+      for (let column = 1; column <= 12; column++) {
+        totalRow.getCell(column).border = borders;
       }
 
-      styleTotal(t);
+      styleTotal(totalRow);
     }
 
     tx.views = [{ state: "frozen", ySplit: 1 }];
+
     tx.autoFilter = {
       from: { row: 1, column: 1 },
       to: { row: 1, column: 12 }
     };
 
-    // Sheet 5: Order Items
+    // SHEET 5: ORDER ITEMS
     const oi = wb.addWorksheet("Order Items");
 
     setWidths(oi, [14, 22, 24, 12, 34, 10, 16, 16]);
@@ -1761,19 +1911,23 @@
     writeTable(
       oi,
       1,
-      ["Order #", "Date", "Customer", "Type", "Product", "Qty", "Unit price", "Subtotal"],
+      [
+        "Order #", "Date", "Customer", "Type",
+        "Product", "Qty", "Unit price", "Subtotal"
+      ],
       itemRows,
       [null, DATE_FMT, null, null, null, "#,##0", PESO, PESO],
       [null, null, null, null, null, "right", "right", "right"]
     );
 
     oi.views = [{ state: "frozen", ySplit: 1 }];
+
     oi.autoFilter = {
       from: { row: 1, column: 1 },
       to: { row: 1, column: 8 }
     };
 
-    // Download Excel file
+    // DOWNLOAD EXCEL FILE
     try {
       const buffer = await wb.xlsx.writeBuffer();
 
@@ -1782,10 +1936,12 @@
       });
 
       const a = document.createElement("a");
+
       a.href = URL.createObjectURL(blob);
       a.download = `Fleurs_Kiosk_${typeName}_Report_${range.tag}.xlsx`;
 
       document.body.appendChild(a);
+
       a.click();
       a.remove();
 
@@ -1794,6 +1950,7 @@
       notify("Excel report exported.", "success");
     } catch (error) {
       console.error(error);
+
       notify(
         "Could not create the Excel file: " + (error?.message || error),
         "error"
@@ -1801,13 +1958,14 @@
     }
   }
 
-  // Login
+  // LOGIN
   $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
 
     if (!validConfig()) {
       $("loginMessage").textContent =
         "Please configure your Supabase URL and anon/publishable key in the code first.";
+
       return;
     }
 
@@ -1827,6 +1985,7 @@
       $("app").classList.remove("hidden");
 
       setAdminEmail(data.user?.email);
+
       await refreshAll();
     } catch (error) {
       $("loginMessage").textContent =
@@ -1837,7 +1996,7 @@
     }
   });
 
-  // Navigation
+  // NAVIGATION
   document.querySelectorAll(".nav-btn[data-page]").forEach(btn => {
     btn.addEventListener("click", () => showPage(btn.dataset.page));
   });
@@ -1852,7 +2011,7 @@
     $("sidebar").classList.toggle("open");
   });
 
-  // Profile dropdown and logout confirmation
+  // PROFILE DROPDOWN AND LOGOUT CONFIRMATION
   const closeProfileMenu = () => {
     $("profileDropdown").classList.add("hidden");
     $("profileButton").setAttribute("aria-expanded", "false");
@@ -1929,17 +2088,18 @@
     }
   });
 
-  // Order filters
+  // ORDER FILTERS
   $("orderSearch").addEventListener("input", renderOrders);
   $("orderDateFilter").addEventListener("change", renderOrders);
 
   $("clearOrderFilters").addEventListener("click", () => {
     $("orderSearch").value = "";
     $("orderDateFilter").value = "";
+
     renderOrders();
   });
 
-  // Customer and feedback filters
+  // CUSTOMER AND FEEDBACK FILTERS
   $("customerSearch").addEventListener("input", renderCustomers);
   $("feedbackSearch").addEventListener("input", renderFeedback);
   $("feedbackRatingFilter").addEventListener("change", renderFeedback);
@@ -1951,10 +2111,11 @@
     $("feedbackRatingFilter").value = "";
     $("feedbackDateFrom").value = "";
     $("feedbackDateTo").value = "";
+
     renderFeedback();
   });
 
-  // Reports and dashboard controls
+  // REPORTS AND DASHBOARD CONTROLS
   $("reportMonth").addEventListener("change", renderReport);
   $("reportDay").addEventListener("change", renderReport);
 
@@ -1962,17 +2123,19 @@
     btn.addEventListener("click", () => {
       dashType = btn.dataset.type;
       dashAnchor = new Date();
+
       renderDashboardChart();
     });
   });
 
   $("dashPrev").addEventListener("click", () => shiftDashboard(-1));
   $("dashNext").addEventListener("click", () => shiftDashboard(1));
+
   $("reportType").addEventListener("change", renderReport);
   $("generateReport").addEventListener("click", renderReport);
   $("exportExcel").addEventListener("click", exportReport);
 
-  // Order detail modal
+  // ORDER DETAIL MODAL
   $("closeOrderModal").addEventListener("click", () => {
     $("orderModal").classList.add("hidden");
   });
@@ -1990,7 +2153,7 @@
     }
   });
 
-  // View Details buttons work for both Orders and Customers tables.
+  // VIEW DETAILS BUTTONS FOR ORDERS AND CUSTOMERS
   document.addEventListener("click", event => {
     const button = event.target.closest("[data-view-order]");
 
@@ -1999,7 +2162,7 @@
     }
   });
 
-  // Today's date
+  // TODAY'S DATE
   $("todayLabel").textContent = new Date().toLocaleDateString("en-PH", {
     weekday: "long",
     year: "numeric",
@@ -2017,7 +2180,7 @@
   syncReportControls();
   setupBranding();
 
-  // Initialize Supabase
+  // INITIALIZE SUPABASE
   if (!validConfig()) {
     $("loginMessage").textContent =
       "Set SUPABASE_URL and SUPABASE_ANON_KEY in the configuration section of this HTML.";
@@ -2041,9 +2204,9 @@
         $("app").classList.remove("hidden");
 
         setAdminEmail(data.session.user?.email);
+
         await refreshAll();
       }
     });
   }
-
 })();

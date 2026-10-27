@@ -310,7 +310,8 @@ export const seedDefaultProducts = async () => {
 
 // ===============================
 // CREATE ORDER
-// Cash and GCash => completed + paid
+// Online: Supabase RPC with idempotency
+// Offline: local demo fallback
 // ===============================
 
 export const createOrder = async (orderPayload, items) => {
@@ -367,9 +368,27 @@ export const createOrder = async (orderPayload, items) => {
   // ===============================
 
   if (isSupabaseConfigured() && supabase) {
+    const idempotencyKey = orderPayload?.idempotency_key;
+
+    if (
+      typeof idempotencyKey !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        idempotencyKey
+      )
+    ) {
+      throw new Error(
+        'Missing or invalid checkout key. Please return to checkout and try again.'
+      );
+    }
+
     try {
-      console.log('[FLEURS DEBUG] Creating order through Supabase RPC');
-      console.log('[FLEURS DEBUG] Payment method:', paymentMethod);
+      console.log(
+        '[FLEURS DEBUG] Creating order through Supabase RPC'
+      );
+      console.log(
+        '[FLEURS DEBUG] Payment method:',
+        paymentMethod
+      );
 
       const { data, error } = await supabase.rpc(
         'create_kiosk_order',
@@ -378,12 +397,19 @@ export const createOrder = async (orderPayload, items) => {
           p_customer_email: customer.email.trim(),
           p_customer_phone: customer.phone.trim(),
           p_items: orderItems,
-          p_payment_method: paymentMethod
+          p_payment_method: paymentMethod,
+          p_idempotency_key: idempotencyKey,
+          p_payment_reference:
+            orderPayload.payment_reference || null
         }
       );
 
       if (error) {
-        console.error('Supabase order creation failed:', error);
+        console.error(
+          'Supabase order creation failed:',
+          error
+        );
+
         throw new Error(error.message);
       }
 
@@ -404,7 +430,9 @@ export const createOrder = async (orderPayload, items) => {
       console.error('Order creation failed:', err);
 
       throw new Error(
-        `Unable to create order: ${err.message || 'Please try again.'}`
+        `Unable to create order: ${
+          err.message || 'Please try again.'
+        }`
       );
     }
   }
@@ -428,6 +456,8 @@ export const createOrder = async (orderPayload, items) => {
     status: 'completed',
     payment_status: 'paid',
     payment_method: paymentMethod,
+    payment_reference: orderPayload.payment_reference || null,
+    idempotency_key: orderPayload.idempotency_key || null,
     created_at: now,
     order_items: items.map((item) => ({
       id: `item-${Date.now()}-${Math.random()
