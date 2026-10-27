@@ -1,11 +1,14 @@
-
+// src/components/CartItem.jsx
 import React from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
+
+const MAX_ITEMS = 10;
 
 export const CartItem = ({
   item,
   onUpdateQuantity,
-  onRemove
+  onRemove,
+  canIncrease = true
 }) => {
   const price = Number(item.price) || 0;
   const quantity = Math.max(1, Number(item.quantity) || 1);
@@ -24,6 +27,8 @@ export const CartItem = ({
   };
 
   const handleIncrease = () => {
+    if (!canIncrease) return;
+
     onUpdateQuantity(item.id, quantity + 1);
   };
 
@@ -70,7 +75,13 @@ export const CartItem = ({
           type="button"
           className="fl-round"
           onClick={handleIncrease}
+          disabled={!canIncrease}
           aria-label={`Increase quantity of ${item.name}`}
+          title={
+            !canIncrease
+              ? `Maximum of ${MAX_ITEMS} items per order`
+              : 'Increase quantity'
+          }
         >
           <Plus size={20} strokeWidth={3} />
         </button>

@@ -1,4 +1,4 @@
-
+// src/pages/CartPage.jsx
 import React, { useState } from 'react';
 import { Header } from '../components/Header';
 import { CartItem } from '../components/CartItem';
@@ -22,7 +22,8 @@ export const CartPage = ({
   const [notice, setNotice] = useState('');
 
   const totalItems = cart.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.quantity) || 0),
+    (sum, item) =>
+      sum + Math.max(0, Number(item.quantity) || 0),
     0
   );
 
@@ -45,9 +46,8 @@ export const CartPage = ({
   const handleCheckout = () => {
     if (totalItems > MAX_ITEMS) {
       setNotice(
-        `Maximum of ${MAX_ITEMS} items per order only. Please remove ${
-          totalItems - MAX_ITEMS
-        } item(s) before checkout.`
+        `Maximum of ${MAX_ITEMS} items per order only. ` +
+        `Please remove ${totalItems - MAX_ITEMS} item(s) before checkout.`
       );
       return;
     }
@@ -59,6 +59,37 @@ export const CartPage = ({
 
     setNotice('');
     onProceed?.();
+  };
+
+  const handleUpdateQuantity = (id, quantity) => {
+    const requestedQuantity = Number(quantity);
+
+    if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1) {
+      return;
+    }
+
+    const otherItems = cart
+      .filter((item) => item.id !== id)
+      .reduce(
+        (sum, item) =>
+          sum + Math.max(0, Number(item.quantity) || 0),
+        0
+      );
+
+    if (otherItems + requestedQuantity > MAX_ITEMS) {
+      setNotice(
+        `Maximum of ${MAX_ITEMS} items per order only.`
+      );
+      return;
+    }
+
+    setNotice('');
+    onUpdateQuantity?.(id, requestedQuantity);
+  };
+
+  const handleRemoveItem = (id) => {
+    setNotice('');
+    onRemoveItem?.(id);
   };
 
   return (
@@ -117,6 +148,7 @@ export const CartPage = ({
               <strong>
                 {totalItems}/{MAX_ITEMS} items
               </strong>
+
               <p style={{ margin: '4px 0 0' }}>
                 {isOverLimit
                   ? `Maximum of ${MAX_ITEMS} items per order only. Remove ${
@@ -131,6 +163,7 @@ export const CartPage = ({
             {notice && (
               <div
                 role="alert"
+                aria-live="assertive"
                 style={{
                   padding: '12px 16px',
                   marginBottom: '16px',
@@ -152,31 +185,9 @@ export const CartPage = ({
                 <CartItem
                   key={item.id}
                   item={item}
-                  onUpdateQuantity={(id, quantity) => {
-                    const otherItems = cart
-                      .filter((cartItem) => cartItem.id !== id)
-                      .reduce(
-                        (sum, cartItem) =>
-                          sum + (Number(cartItem.quantity) || 0),
-                        0
-                      );
-
-                    if (
-                      otherItems + Number(quantity) > MAX_ITEMS
-                    ) {
-                      setNotice(
-                        `Maximum of ${MAX_ITEMS} items per order only.`
-                      );
-                      return;
-                    }
-
-                    setNotice('');
-                    onUpdateQuantity(id, quantity);
-                  }}
-                  onRemove={(id) => {
-                    setNotice('');
-                    onRemoveItem(id);
-                  }}
+                  canIncrease={totalItems < MAX_ITEMS}
+                  onUpdateQuantity={handleUpdateQuantity}
+                  onRemove={handleRemoveItem}
                 />
               ))}
             </div>
@@ -184,6 +195,7 @@ export const CartPage = ({
             <div className="fl-total">
               <div className="fl-total__row">
                 <span>Total</span>
+
                 <span className="fl-total__value">
                   {formatPrice(totalAmount)}
                 </span>
