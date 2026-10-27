@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { BowSvg } from './Decorations';
 import { getStockInfo } from '../utils/stock';
 
-export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
+export const ProductCard = ({ product, onSelect }) => {
   const stockInfo = getStockInfo(product);
   const { soldOut, low, qty } = stockInfo;
 
@@ -12,75 +13,68 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
   };
 
   const handleKeyDown = (event) => {
-    if (soldOut) {
-      event.preventDefault();
-      return;
-    }
-
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       handleSelect();
     }
   };
 
-  const stockLabel =
-    qty === null
-      ? ''
-      : soldOut
-        ? 'OUT OF STOCK'
-        : `ONLY ${qty} LEFT`;
-
   return (
     <div
+      className={`product-card${soldOut ? ' product-card--sold-out' : ''}`}
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
-      className={`product-card${soldOut ? ' product-card--sold-out' : ''}`}
       role="button"
       tabIndex={soldOut ? -1 : 0}
       aria-disabled={soldOut}
-      aria-label={`${product.name}, ₱${Number(product.price).toLocaleString()}${
-        stockLabel ? `, ${stockLabel}` : ''
-      }`}
       style={{
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        padding: '12px',
         cursor: soldOut ? 'not-allowed' : 'pointer',
-        opacity: soldOut ? 0.65 : 1,
-        filter: soldOut ? 'grayscale(35%)' : 'none',
+        opacity: soldOut ? 0.7 : 1,
       }}
     >
-      {/* Decorative Bow */}
+      {/* Decorative bow */}
       <div
         aria-hidden="true"
         style={{
           position: 'absolute',
           top: '10px',
           left: '14px',
-          zIndex: 4,
-          opacity: 0.95,
+          zIndex: 2,
           pointerEvents: 'none',
         }}
       >
         <BowSvg style={{ width: '42px', height: '26px' }} />
       </div>
 
-      {/* Price Badge */}
-      <div className="price-badge">
+      {/* Price */}
+      <div
+        className="price-badge"
+        style={{
+          alignSelf: 'flex-end',
+          position: 'relative',
+          zIndex: 3,
+        }}
+      >
         ₱{Number(product.price).toLocaleString()}
       </div>
 
-      {/* Stock Notification - Above Product Image */}
+      {/* STOCK NOTICE: directly above the image */}
       {qty !== null && (
         <div
           role="status"
           style={{
-            position: 'absolute',
-            top: '48px',
-            left: '12px',
-            right: '12px',
-            zIndex: 6,
+            width: '100%',
+            padding: '10px 8px',
+            borderRadius: '10px',
             boxSizing: 'border-box',
-            padding: '9px 12px',
-            borderRadius: '12px',
+            textAlign: 'center',
+            fontSize: '0.85rem',
+            fontWeight: 900,
             background: soldOut
               ? '#991b1b'
               : low
@@ -98,58 +92,52 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
                   ? '#f59e0b'
                   : '#86efac'
             }`,
-            fontSize: '0.8rem',
-            fontWeight: 900,
-            textAlign: 'center',
-            letterSpacing: '0.04em',
-            boxShadow: '0 3px 8px rgba(0,0,0,0.10)',
-            pointerEvents: 'none',
           }}
         >
-          {soldOut ? '✕ OUT OF STOCK' : `⚠ ${stockLabel}`}
+          {soldOut ? '✕ OUT OF STOCK' : `⚠ ONLY ${qty} LEFT`}
         </div>
       )}
 
-      {/* Product Image */}
-      <div className="image-frame">
+      {/* Product image */}
+      <div
+        className="image-frame"
+        style={{
+          width: '100%',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
         {product.image_url ? (
           <img
             src={product.image_url}
             alt={product.name}
             loading="lazy"
             style={{
+              display: 'block',
+              width: '100%',
               filter: soldOut ? 'grayscale(100%)' : 'none',
             }}
           />
         ) : (
-          <div
-            style={{
-              minHeight: '120px',
-              display: 'grid',
-              placeItems: 'center',
-              color: '#9ca3af',
-            }}
-          >
+          <div style={{ padding: '30px 8px', textAlign: 'center' }}>
             No image available
           </div>
         )}
       </div>
 
-      {/* Product Name */}
-      <h3 className="product-title">{product.name}</h3>
+      {/* Product name */}
+      <h3 className="product-title" style={{ margin: 0 }}>
+        {product.name}
+      </h3>
 
-      {/* Stock Details */}
+      {/* Stock count */}
       {qty !== null && (
         <p
           style={{
-            margin: '6px 0 0',
+            margin: 0,
             fontSize: '0.85rem',
             fontWeight: 700,
-            color: soldOut
-              ? '#991b1b'
-              : low
-                ? '#92400e'
-                : '#166534',
+            color: soldOut ? '#991b1b' : low ? '#92400e' : '#166534',
           }}
         >
           {soldOut
@@ -158,15 +146,13 @@ export const ProductCard = ({ product, onSelect, maxQuantity = 10 }) => {
         </p>
       )}
 
-      {/* Selection Prompt */}
       <div
         style={{
+          marginTop: '4px',
+          textAlign: 'center',
           fontSize: '0.8rem',
           fontWeight: 800,
           color: soldOut ? '#991b1b' : '#3b82f6',
-          letterSpacing: '0.04em',
-          marginTop: '8px',
-          textAlign: 'center',
         }}
       >
         {soldOut ? 'UNAVAILABLE' : 'TAP TO SELECT'}
