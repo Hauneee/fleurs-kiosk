@@ -460,7 +460,7 @@ export const createOrder = async (orderPayload, items) => {
       }, ORDER_REQUEST_TIMEOUT_MS);
 
       const { data, error } = await supabase
-        .rpc('create_kiosk_order', {
+               .rpc('create_kiosk_order', {
           p_customer_name: customer.name.trim(),
           p_customer_email: customer.email.trim(),
           p_customer_phone: customer.phone.trim(),
@@ -468,6 +468,12 @@ export const createOrder = async (orderPayload, items) => {
           p_payment_method: paymentMethod,
           p_idempotency_key: idempotencyKey,
           p_payment_reference: paymentReference,
+          p_cash_received:
+            paymentMethod === 'cash'
+              ? Number(paymentInfo?.cashReceived) ||
+                Number(orderPayload?.amount_paid) ||
+                null
+              : null,
         })
         .abortSignal(controller.signal);
 
