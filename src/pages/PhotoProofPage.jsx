@@ -6,19 +6,239 @@ import {
   Trash2,
   RefreshCw,
   CheckCircle2,
+  Download,
+  Receipt,
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { formatPeso } from '../utils/formatPeso';
 import '../styles/confirmation.css';
 
 const BUCKET = 'order-proofs';
 const MAX_WIDTH = 1024;
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 
+const getOrderItems = (order) =>
+  order?.items || order?.order_items || order?.cart || [];
+
+const getCustomer = (order) =>
+  order?.customer || order?.customer_info || {};
+
+const getPaymentMethod = (order) =>
+  order?.payment_method ||
+  order?.paymentMethod ||
+  order?.method ||
+  'Not specified';
+
+const drawReceipt = (order) =>
+  new Promise((resolve, reject) => {
+    try {
+      const items = getOrderItems(order);
+      const customer = getCustomer(order);
+      const paymentMethod = getPaymentMethod(order);
+      const total = Number(
+        order?.total_amount ??
+        order?.totalAmount ??
+        order?.total ??
+        0
+      );
+
+      const width = 800;
+      const padding = 48;
+      const lineHeight = 36;
+      const itemLines = items.reduce(
+        (sum, item) => sum + (String(item.name || item.product_name || 'Item').length > 27 ? 2 : 1),
+        0
+      );
+
+      const height = Math.max(
+        850,
+        540 + itemLines * lineHeight + 300
+      );
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not create the receipt image.');
+
+      ctx.fillStyle = '#FFF9FA';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = '#C2255C';
+      ctx.fillRect(0, 0, width, 18);
+
+      let y = 76;
+
+      const center = (text, size, color = '#684854', weight = '600') => {
+        ctx.font = `${weight} ${size}px Arial`;
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.fillText(text, width / 2, y);
+        y += size + 14;
+      };
+
+      const left = (text, size = 24, color = '#684854', weight = '400') => {
+        ctx.font = `${weight} ${size}px Arial`;
+        ctx.fillStyle = color;
+        ctx.textAlign = 'left';
+        ctx.fillText(text, padding, y);
+      };
+
+      const right = (text, size = 24, color = '#684854', weight = '600') => {
+        ctx.font = `${weight} ${size}px Arial`;
+        ctx.fillStyle = color;
+        ctx.textAlign = 'right';
+        ctx.fillText(text, width - padding, y);
+      };
+
+      const divider = () => {
+        y += 8;
+        ctx.strokeStyle = '#E8C7D1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+        y += 28;
+      };
+
+      center('FLEURS', 42, '#C2255C', '800');
+      center('by Blossoms Craft', 25);
+      center('ORDER RECEIPT', 30, '#C2255C', '800');
+
+      y += 8;
+      divider();
+
+      left(`Order No.: ${order?.order_number || 'N/A'}`, 24, '#3F1424', '700');
+      y += 38;
+
+      left(
+        `Date: ${order?.created_at ? new Date(order.created_at).toLocaleString() : new Date().toLocaleString()}`,
+        19
+      );
+      y += 34;
+
+      divider();
+
+      left('CUSTOMER DETAILS', 23, '#C2255C', '800');
+      y += 38;
+
+      left(`Name: ${customer.name || order?.customer_name || 'N/A'}`, 21);
+      y += 34;
+
+      left(`Email: ${customer.email || order?.customer_email || 'N/A'}`, 19);
+      y += 32;
+
+      left(`Phone: ${customer.phone || order?.customer_phone || 'N/A'}`, 21);
+      y += 34;
+
+      left(`Section: ${customer.section || 'N/A'}`, 21);
+      y += 38;
+
+      divider();
+
+      left('ORDER ITEMS', 23, '#C2255C', '800');
+      y += 42;
+
+      if (items.length) {
+        items.forEach((item) => {
+          const name = String(item.name || item.product_name || 'Item');
+          const quantity = Number(item.quantity) || 1;
+          const price = Number(item.price ?? item.unit_price) || 0;
+          const lineTotal = Number(item.subtotal) || price * quantity;
+
+          ctx.font = '600 21px Arial';
+          ctx.fillStyle = '#684854';
+          ctx.textAlign = 'left';
+
+          const firstLine = name.length > 27 ? `${name.slice(0, 27)}…` : name;
+          ctx.fillText(`${firstLine} × ${quantity}`, padding, y);
+
+          ctx.textAlign = 'right';
+          ctx.fillText(formatPeso(lineTotal), width - padding, y);
+          y += 34;
+
+          if (name.length > 27) {
+            ctx.textAlign = 'left';
+            ctx.font = '18px Arial';
+            ctx.fillText(name.slice(27, 58), padding + 10, y);
+            y += 30;
+          }
+        });
+      } else {
+        left('Item details unavailable', 21);
+        y += 34;
+      }
+
+      y += 8;
+      divider();
+
+      left('TOTAL', 30, '#C2255C', '800');
+      right(formatPeso(total), 30, '#C2255C', '800');
+      y += 54;
+
+      left(`Payment: ${paymentMethod.toUpperCase()}`, 22, '#3F1424', '700');
+      y += 38;
+
+      const received = Number(
+        order?.amount_paid ??
+        order?.cash_received ??
+        order?.cashReceived
+      );
+
+      const change = Number(
+        order?.change_amount ??
+        order?.change
+      );
+
+      if (Number.isFinite(received) && received > 0) {
+        left('Cash received', 21);
+        right(formatPeso(received), 21);
+        y += 36;
+      }
+
+      if (Number.isFinite(change) && change >= 0 && paymentMethod.toLowerCase() === 'cash') {
+        left('Change', 21);
+        right(formatPeso(change), 21);
+        y += 36;
+      }
+
+      y += 10;
+      divider();
+
+      center('Thank you for choosing Fleurs!', 25, '#C2255C', '700');
+      center('Please keep this receipt for your records.', 18);
+      center('Fleurs by Blossoms Craft', 18);
+
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = width;
+      finalCanvas.height = y + 45;
+
+      const finalCtx = finalCanvas.getContext('2d');
+      if (!finalCtx) throw new Error('Could not finish the receipt image.');
+
+      finalCtx.fillStyle = '#FFF9FA';
+      finalCtx.fillRect(0, 0, width, finalCanvas.height);
+      finalCtx.drawImage(canvas, 0, 0);
+
+      finalCanvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Could not generate the receipt PNG.'));
+          return;
+        }
+        resolve(blob);
+      }, 'image/png');
+    } catch (error) {
+      reject(error);
+    }
+  });
+
 export const PhotoProofPage = ({ order, onDone }) => {
-  // idle | live | preview | saving | error
   const [phase, setPhase] = useState('idle');
   const [message, setMessage] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -27,14 +247,10 @@ export const PhotoProofPage = ({ order, onDone }) => {
   const previewUrlRef = useRef('');
 
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (videoRef.current) videoRef.current.srcObject = null;
   };
 
   const clearPreview = () => {
@@ -49,10 +265,8 @@ export const PhotoProofPage = ({ order, onDone }) => {
 
   const showPreview = (blob) => {
     clearPreview();
-
     const url = URL.createObjectURL(blob);
     previewUrlRef.current = url;
-
     blobRef.current = blob;
     setPreviewUrl(url);
     setMessage('');
@@ -62,22 +276,15 @@ export const PhotoProofPage = ({ order, onDone }) => {
   useEffect(() => {
     return () => {
       stopCamera();
-
-      if (previewUrlRef.current) {
-        URL.revokeObjectURL(previewUrlRef.current);
-      }
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (phase === 'live' && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
-
-      videoRef.current.play().catch((error) => {
-        console.error('Camera preview failed:', error);
-        setMessage(
-          'Could not start the camera preview. Please try again or choose a photo from your gallery.'
-        );
+      videoRef.current.play().catch(() => {
+        setMessage('Camera preview failed. Please choose a photo from your gallery.');
       });
     }
   }, [phase]);
@@ -86,17 +293,14 @@ export const PhotoProofPage = ({ order, onDone }) => {
     setMessage('');
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMessage(
-        'Camera access is unavailable. Please use Open Gallery or check your browser permissions.'
-      );
+      setMessage('Camera unavailable. Please use Open Gallery.');
       setPhase('error');
       return;
     }
 
     try {
       stopCamera();
-
-      const stream = await navigator.mediaDevices.getUserMedia({
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
           width: { ideal: 1280 },
@@ -104,71 +308,53 @@ export const PhotoProofPage = ({ order, onDone }) => {
         },
         audio: false,
       });
-
-      streamRef.current = stream;
       setPhase('live');
     } catch (error) {
       console.error('Camera access failed:', error);
-
-      setMessage(
-        'Camera access was blocked. Allow camera permission or choose a photo from your gallery.'
-      );
+      setMessage('Camera permission was blocked. Please choose a photo from your gallery.');
       setPhase('error');
     }
   };
 
   const takePhoto = () => {
     const video = videoRef.current;
-
-    if (!video || !video.videoWidth) {
-      setMessage('The camera is not ready yet. Please try again.');
+    if (!video?.videoWidth) {
+      setMessage('Camera is not ready yet. Please try again.');
       return;
     }
 
     const scale = Math.min(1, MAX_WIDTH / video.videoWidth);
     const width = Math.round(video.videoWidth * scale);
     const height = Math.round(video.videoHeight * scale);
-
     const canvas = document.createElement('canvas');
+
     canvas.width = width;
     canvas.height = height;
 
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-      setMessage('Could not process the photo. Please try again.');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      setMessage('Could not process the photo.');
       return;
     }
 
-    // Mirror the photo to match the front-camera preview.
-    context.translate(width, 0);
-    context.scale(-1, 1);
-    context.drawImage(video, 0, 0, width, height);
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, width, height);
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          setMessage('Could not create the photo. Please try again.');
-          return;
-        }
-
-        stopCamera();
-        showPreview(blob);
-      },
-      'image/jpeg',
-      0.85
-    );
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setMessage('Could not create the photo. Please try again.');
+        return;
+      }
+      stopCamera();
+      showPreview(blob);
+    }, 'image/jpeg', 0.85);
   };
 
   const handleGallerySelection = (event) => {
     const file = event.target.files?.[0];
-
-    // Allow the same photo to be selected again later.
     event.target.value = '';
-
     if (!file) return;
-
-    setMessage('');
 
     if (!file.type.startsWith('image/')) {
       setMessage('Please select an image file.');
@@ -176,62 +362,75 @@ export const PhotoProofPage = ({ order, onDone }) => {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      setMessage('This photo is too large. Please choose an image under 15 MB.');
+      setMessage('Please choose an image under 15 MB.');
       return;
     }
 
     stopCamera();
-
     const temporaryUrl = URL.createObjectURL(file);
     const image = new Image();
 
     image.onload = () => {
-      try {
-        const scale = Math.min(1, MAX_WIDTH / image.naturalWidth);
-        const width = Math.round(image.naturalWidth * scale);
-        const height = Math.round(image.naturalHeight * scale);
+      const scale = Math.min(1, MAX_WIDTH / image.naturalWidth);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+      const ctx = canvas.getContext('2d');
 
-        const context = canvas.getContext('2d');
-
-        if (!context) {
-          throw new Error('Could not process the selected image.');
-        }
-
-        context.drawImage(image, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            URL.revokeObjectURL(temporaryUrl);
-
-            if (!blob) {
-              setMessage(
-                'Could not process this photo. Please choose another one.'
-              );
-              return;
-            }
-
-            showPreview(blob);
-          },
-          'image/jpeg',
-          0.85
-        );
-      } catch (error) {
+      if (!ctx) {
         URL.revokeObjectURL(temporaryUrl);
-        console.error('Gallery image processing failed:', error);
-        setMessage('Could not process this photo. Please choose another one.');
+        setMessage('Could not process this image.');
+        return;
       }
+
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(temporaryUrl);
+        if (!blob) {
+          setMessage('Could not process this image.');
+          return;
+        }
+        showPreview(blob);
+      }, 'image/jpeg', 0.85);
     };
 
     image.onerror = () => {
       URL.revokeObjectURL(temporaryUrl);
-      setMessage('Could not open this image. Please choose another one.');
+      setMessage('Could not open this image.');
     };
 
     image.src = temporaryUrl;
+  };
+
+  const downloadReceipt = async () => {
+    if (!order?.order_number) {
+      setMessage('Order number is missing, so the receipt cannot be generated.');
+      return;
+    }
+
+    setDownloadingReceipt(true);
+    setMessage('');
+
+    try {
+      const blob = await drawReceipt(order);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = `Fleurs-Receipt-${order.order_number}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setMessage('Receipt download started. Check your Downloads or save the image to Gallery/Photos.');
+    } catch (error) {
+      console.error('Receipt generation failed:', error);
+      setMessage(error?.message || 'Could not generate the receipt.');
+    } finally {
+      setDownloadingReceipt(false);
+    }
   };
 
   const openGallery = () => {
@@ -241,14 +440,12 @@ export const PhotoProofPage = ({ order, onDone }) => {
 
   const retake = () => {
     if (phase === 'saving') return;
-
     clearPreview();
     startCamera();
   };
 
   const removePhoto = () => {
     if (phase === 'saving') return;
-
     stopCamera();
     clearPreview();
     setMessage('');
@@ -264,13 +461,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
     }
 
     if (!order?.order_number) {
-      setMessage(
-        'Order information is missing. Please return to your order and try again.'
-      );
-      console.error(
-        'Photo proof cannot be saved: missing order number.',
-        order
-      );
+      setMessage('Order information is missing.');
       return;
     }
 
@@ -283,11 +474,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
     setMessage('');
 
     try {
-      const fileName =
-        `${
-          globalThis.crypto?.randomUUID?.() ||
-          `${Date.now()}-${Math.random().toString(36).slice(2)}`
-        }.jpg`;
+      const fileName = `${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
@@ -296,9 +483,7 @@ export const PhotoProofPage = ({ order, onDone }) => {
           upsert: false,
         });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
       const { data: saved, error: rpcError } = await supabase.rpc(
         'save_order_proof',
@@ -308,32 +493,18 @@ export const PhotoProofPage = ({ order, onDone }) => {
         }
       );
 
-      if (rpcError) {
-        throw rpcError;
-      }
-
+      if (rpcError) throw rpcError;
       if (saved === false) {
-        throw new Error('Could not link the photo to your order. Please try again.');
+        throw new Error('Could not link the photo to your order.');
       }
 
-      const { data } = supabase.storage
-        .from(BUCKET)
-        .getPublicUrl(fileName);
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
+      if (!data?.publicUrl) throw new Error('Could not retrieve the saved photo URL.');
 
-      if (!data?.publicUrl) {
-        throw new Error(
-          'The photo was saved, but its URL could not be retrieved.'
-        );
-      }
-
-      // Continue to the final order confirmation page.
-      onDone(data.publicUrl);
+      onDone?.(data.publicUrl);
     } catch (error) {
       console.error('Saving order proof failed:', error);
-
-      setMessage(
-        error?.message || 'Could not save your photo. Please try again.'
-      );
+      setMessage(error?.message || 'Could not save your photo.');
       setPhase('preview');
     }
   };
@@ -355,13 +526,50 @@ export const PhotoProofPage = ({ order, onDone }) => {
   return (
     <div className="fl-done fl-photo-proof-page">
       <div className="fl-done__card">
-        <h1 className="fl-done__title">One last step</h1>
+        <h1 className="fl-done__title">Your Receipt & Photo Proof</h1>
 
         <p className="fl-done__lead">
-          Please take a photo of yourself with your flowers, or choose a
-          picture from your gallery. Your photo will be saved as proof of
-          delivery and can be viewed later in Track My Order.
+          Download your receipt first, then take a photo with your flowers
+          or choose one from your gallery as proof of delivery.
         </p>
+
+        <section
+          style={{
+            margin: '0 0 24px',
+            padding: '20px',
+            borderRadius: '18px',
+            border: '1px solid #F0D5DE',
+            background: '#FFF8F8',
+            textAlign: 'center',
+          }}
+        >
+          <Receipt size={38} color="#C2255C" />
+
+          <h2 style={{ color: '#684854', margin: '10px 0' }}>
+            Order Receipt
+          </h2>
+
+          <p style={{ color: '#684854', overflowWrap: 'anywhere' }}>
+            Order No.: <strong>{order?.order_number || 'N/A'}</strong>
+          </p>
+
+          <button
+            type="button"
+            onClick={downloadReceipt}
+            disabled={downloadingReceipt}
+            style={{
+              ...actionStyle,
+              background: '#C2255C',
+              color: '#FFFFFF',
+              borderColor: '#C2255C',
+              width: '100%',
+              maxWidth: '340px',
+            }}
+          >
+            <Download size={20} />
+            {downloadingReceipt ? 'Preparing receipt...' : 'DOWNLOAD RECEIPT'}
+          </button>
+        </section>
 
         <section className="fl-photo">
           <input
@@ -385,33 +593,14 @@ export const PhotoProofPage = ({ order, onDone }) => {
                 />
               </div>
 
-              <div
-                className="fl-photo__row"
-                style={{ flexWrap: 'wrap', justifyContent: 'center' }}
-              >
-                <button
-                  type="button"
-                  className="fl-btn fl-btn--rose"
-                  onClick={takePhoto}
-                >
-                  <Camera size={20} />
-                  Take photo
+              <div className="fl-photo__row" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button type="button" className="fl-btn fl-btn--rose" onClick={takePhoto}>
+                  <Camera size={20} /> Take photo
                 </button>
-
-                <button
-                  type="button"
-                  className="fl-btn fl-btn--soft"
-                  onClick={openGallery}
-                >
-                  <ImagePlus size={20} />
-                  Open gallery
+                <button type="button" className="fl-btn fl-btn--soft" onClick={openGallery}>
+                  <ImagePlus size={20} /> Open gallery
                 </button>
-
-                <button
-                  type="button"
-                  className="fl-btn fl-btn--soft"
-                  onClick={removePhoto}
-                >
+                <button type="button" className="fl-btn fl-btn--soft" onClick={removePhoto}>
                   Cancel
                 </button>
               </div>
@@ -421,122 +610,43 @@ export const PhotoProofPage = ({ order, onDone }) => {
           {(phase === 'preview' || phase === 'saving') && (
             <>
               <div className="fl-photo__frame">
-                <img
-                  src={previewUrl}
-                  alt="Preview of your delivery proof photo"
-                  className="fl-photo__video"
-                />
+                <img src={previewUrl} alt="Delivery proof photo preview" className="fl-photo__video" />
               </div>
 
-              <p
-                style={{
-                  color: '#684854',
-                  textAlign: 'center',
-                  fontWeight: 700,
-                  margin: '12px 0',
-                }}
-              >
+              <p style={{ color: '#684854', textAlign: 'center', fontWeight: 700 }}>
                 Happy with your photo? Save it to continue, or change it.
               </p>
 
-              <div
-                className="fl-photo__row"
-                style={{ flexWrap: 'wrap', justifyContent: 'center' }}
-              >
-                <button
-                  type="button"
-                  className="fl-btn fl-btn--soft"
-                  onClick={retake}
-                  disabled={phase === 'saving'}
-                >
-                  <RefreshCw size={18} />
-                  Retake
+              <div className="fl-photo__row" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button type="button" className="fl-btn fl-btn--soft" onClick={retake} disabled={phase === 'saving'}>
+                  <RefreshCw size={18} /> Retake
                 </button>
-
-                <button
-                  type="button"
-                  style={{
-                    ...actionStyle,
-                    background: '#FFFFFF',
-                    color: '#684854',
-                  }}
-                  onClick={openGallery}
-                  disabled={phase === 'saving'}
-                >
-                  <ImagePlus size={18} />
-                  Choose another
+                <button type="button" style={{ ...actionStyle, background: '#FFFFFF', color: '#684854' }} onClick={openGallery} disabled={phase === 'saving'}>
+                  <ImagePlus size={18} /> Choose another
                 </button>
-
-                <button
-                  type="button"
-                  style={{
-                    ...actionStyle,
-                    background: '#FFF0F2',
-                    color: '#A34455',
-                    borderColor: '#F0C8D0',
-                  }}
-                  onClick={removePhoto}
-                  disabled={phase === 'saving'}
-                >
-                  <Trash2 size={18} />
-                  Remove photo
+                <button type="button" style={{ ...actionStyle, background: '#FFF0F2', color: '#A34455' }} onClick={removePhoto} disabled={phase === 'saving'}>
+                  <Trash2 size={18} /> Remove photo
                 </button>
-
-                <button
-                  type="button"
-                  className="fl-btn fl-btn--rose"
-                  onClick={savePhoto}
-                  disabled={phase === 'saving'}
-                >
-                  <CheckCircle2 size={20} />
-                  {phase === 'saving' ? 'Saving...' : 'Save and continue'}
+                <button type="button" className="fl-btn fl-btn--rose" onClick={savePhoto} disabled={phase === 'saving'}>
+                  <CheckCircle2 size={20} /> {phase === 'saving' ? 'Saving...' : 'Save and continue'}
                 </button>
               </div>
             </>
           )}
 
           {(phase === 'idle' || phase === 'error') && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                alignItems: 'center',
-                width: '100%',
-              }}
-            >
-              <button
-                type="button"
-                className="fl-btn fl-btn--rose"
-                onClick={startCamera}
-              >
-                <Camera size={20} />
-                Open camera
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', width: '100%' }}>
+              <button type="button" className="fl-btn fl-btn--rose" onClick={startCamera}>
+                <Camera size={20} /> Open camera
               </button>
-
-              <button
-                type="button"
-                style={{
-                  ...actionStyle,
-                  background: '#FFFFFF',
-                  color: '#684854',
-                  width: '100%',
-                  maxWidth: '320px',
-                }}
-                onClick={openGallery}
-              >
-                <ImagePlus size={20} />
-                Open gallery
+              <button type="button" style={{ ...actionStyle, background: '#FFFFFF', color: '#684854', width: '100%', maxWidth: '320px' }} onClick={openGallery}>
+                <ImagePlus size={20} /> Open gallery
               </button>
             </div>
           )}
 
           {message && (
-            <p
-              className="fl-photo__error"
-              role="alert"
-              style={{ overflowWrap: 'anywhere' }}
-            >
+            <p className="fl-photo__error" role="status" style={{ overflowWrap: 'anywhere' }}>
               {message}
             </p>
           )}

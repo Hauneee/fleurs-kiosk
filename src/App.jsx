@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 
 import { HomePage } from './pages/HomePage';
@@ -461,7 +462,23 @@ export default function App() {
         throw new Error('Unable to save the order. Please try again.');
       }
 
-      handleOrderSuccess(order);
+      // Keep the full receipt data before handleOrderSuccess clears the cart.
+      const completeOrder = {
+        ...order,
+        customer: { ...customerInfo },
+        items: cart.map((item) => ({
+          ...item,
+          quantity: getQuantity(item),
+          line_total:
+            (Number(item.price) || 0) * getQuantity(item),
+        })),
+        total_amount: amount,
+        payment_method: method,
+        amount_paid: isCash ? cashReceived : amount,
+        change_amount: isCash ? change : 0,
+      };
+
+      handleOrderSuccess(completeOrder);
     } catch (error) {
       console.error('Order save failed:', error);
 
