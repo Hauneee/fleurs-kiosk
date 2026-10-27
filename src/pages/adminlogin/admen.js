@@ -439,49 +439,19 @@
     );
   }
 
-  async function loadOrders() {
-    const { data, error } = await sb
-      .from(ORDERS_TABLE)
-      .select(`*, ${ITEMS_RELATION}(*)`)
-      .limit(5000);
+  
+async function loadOrders() {
+  const { data, error } = await sb
+    .from(ORDERS_TABLE)
+    .select(`*, ${ITEMS_RELATION}(*)`)
+    .not("proof_photo_path", "is", null)
+    .neq("proof_photo_path", "")
+    .limit(5000);
 
-    if (error) throw error;
+  if (error) throw error;
 
-    orders = data || [];
-  }
-
-  async function loadFeedback() {
-    const { data, error } = await sb.rpc(RATINGS_RPC);
-
-    if (error) {
-      feedback = [];
-
-      console.warn("Ratings RPC unavailable:", error.message);
-
-      return error.message;
-    }
-
-    feedback = Array.isArray(data) ? data : [];
-
-    return "";
-  }
-
-  async function loadProducts() {
-    const { data, error } = await sb
-      .from("products")
-      .select("*")
-      .limit(2000);
-
-    if (error) {
-      products = [];
-
-      console.warn("Products table unavailable:", error.message);
-
-      return;
-    }
-
-    products = data || [];
-  }
+  orders = data || [];
+}
 
   // ==========================================
   // PRODUCTS & INVENTORY
@@ -1536,29 +1506,38 @@
   // Uses a signed URL so it works whether the order-proofs bucket
   // is private or public. Needs a SELECT policy on storage.objects
   // for the "order-proofs" bucket (see the SQL policy in the chat).
-  async function resolveProofUrl(value) {
-    if (!value || typeof value !== "string") return "";
+ async function resolveProofUrl(value) {
+  if (!value || typeof value !== "string") return "";
 
-    const raw = value.trim();
+  const raw = value.trim();
 
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (!PROOF_BUCKET || !sb) return "";
+  // Already a complete URL
+  if (/^https?:\/\//i.test(raw)) return raw;
 
-    const path = raw
-      .replace(/^\/+/, "")
-      .replace(/^proofs\//, "");
+  if (!PROOF_BUCKET || !sb) return "";
 
-    const { data, error } = await sb.storage
-      .from(PROOF_BUCKET)
-      .createSignedUrl(path, 3600);
+  let path = raw.replace(/^\/+/, "");
 
-    if (error) {
-      console.warn("Proof photo URL failed:", error.message);
-      return "";
-    }
+  // Remove bucket name if it was accidentally included in the stored path
+  path = path.replace(/^order-proofs\//i, "");
 
-    return data?.signedUrl || "";
+  // Remove legacy folder prefix if present
+  path = path.replace(/^proofs\//i, "");
+
+  const { data, error } = await sb.storage
+    .from(PROOF_BUCKET)
+    .createSignedUrl(path, 3600);
+
+  if (error) {
+    console.error("Proof photo URL failed:", error.message, {
+      originalValue: raw,
+      storagePath: path
+    });
+    return "";
   }
+
+  return data?.signedUrl || "";
+}
 
   function proofSection(o) {
     const raw = proofValue(o);

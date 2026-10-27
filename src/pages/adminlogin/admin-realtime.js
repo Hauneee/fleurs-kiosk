@@ -236,11 +236,11 @@
       `).join("");
     }
 
-  status.textContent = !activeUserId
-  ? "Waiting for admin session…"
-  : !channel
-    ? "Connecting to Realtime…"
-    : "Realtime subscription started";
+    status.textContent = !activeUserId
+      ? "Waiting for admin session…"
+      : !channel
+        ? "Connecting to Realtime…"
+        : "Realtime subscription started";
   }
 
   function createBell() {
@@ -323,7 +323,6 @@
 
       renderNotifications();
 
-      // Open the existing order detail button when available.
       const orderButton = Array.from(
         document.querySelectorAll("[data-view-order]")
       ).find((element) =>
@@ -350,6 +349,9 @@
   function pushOrderNotification(order) {
     if (order?.id == null) return;
 
+    // Safety check: never notify without proof.
+    if (!order.proof_photo_path) return;
+
     const id = String(order.id);
 
     if (knownOrderIds.has(id)) return;
@@ -369,6 +371,7 @@
     });
 
     notifications = notifications.slice(0, MAX_NOTIFICATIONS);
+
     unreadCount = notifications.filter(
       (item) => !item.read
     ).length;
@@ -381,10 +384,8 @@
       })
     );
 
-    // Refresh the existing orders/dashboard UI.
     refreshAdmin();
 
-    // Show a browser notification only if permission was already granted.
     if (
       "Notification" in window &&
       Notification.permission === "granted"
@@ -415,6 +416,9 @@
     channel = null;
     activeUserId = null;
     knownOrderIds.clear();
+    notifications = [];
+    unreadCount = 0;
+
     renderNotifications();
   }
 
@@ -428,7 +432,8 @@
     client = supabaseClient;
     activeUserId = userId;
 
-    // Existing orders are marked as known so they don't alert on startup.
+    // Mark existing orders as known so they do not trigger
+    // notifications when the admin opens the dashboard.
     try {
       const { data, error } = await client
         .from("orders")
@@ -455,6 +460,8 @@
 
     channel = client
       .channel(CHANNEL_NAME)
+
+      // New order: notify only if the proof is already saved.
       .on(
         "postgres_changes",
         {
@@ -463,9 +470,35 @@
           table: "orders"
         },
         (payload) => {
-          pushOrderNotification(payload.new || {});
+          const order = payload.new || {};
+
+          if (!order.proof_photo_path) return;
+
+          pushOrderNotification(order);
         }
       )
+
+      // Existing order: notify when the proof is added later.
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders"
+        },
+        (payload) => {
+          const order = payload.new || {};
+          const oldOrder = payload.old || {};
+
+          if (!order.proof_photo_path) return;
+
+          // Notify only on the transition from no proof to proof.
+          if (oldOrder.proof_photo_path) return;
+
+          pushOrderNotification(order);
+        }
+      )
+
       .on(
         "postgres_changes",
         {
@@ -477,6 +510,7 @@
           refreshAdmin();
         }
       )
+
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           console.info(
@@ -527,7 +561,6 @@
   async function boot() {
     createBell();
 
-    // Wait for admen.js to expose its Supabase client.
     let attempts = 0;
 
     const waitForClient = window.setInterval(async () => {
