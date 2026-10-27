@@ -1,50 +1,52 @@
 import { useState } from "react";
 import { supabase } from "../services/supabase";
 
-const FLOWER = "\u{1F338}";
-const STAR = "\u2605";
+const FLOWER = "🌸";
+const STAR = "★";
 
-// One star that can be tapped on its left half (x.5) or right half (whole)
 function Star({ index, value, onPick, onHover }) {
-  const fill = value - index; // how much of this star is lit
-  const pct = fill >= 1 ? 100 : fill >= 0.5 ? 50 : 0;
+  const fill = Math.max(0, Math.min(1, value - index));
 
-  const valueAt = (e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const leftHalf = e.clientX - r.left < r.width / 2;
-    return index + (leftHalf ? 0.5 : 1);
+  const valueAt = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return index + (event.clientX - rect.left < rect.width / 2 ? 0.5 : 1);
   };
 
   return (
-    <span
-      role="button"
+    <button
+      type="button"
       aria-label={`Rate ${index + 1} stars`}
-      onClick={(e) => onPick(valueAt(e))}
-      onPointerMove={(e) => e.pointerType === "mouse" && onHover(valueAt(e))}
+      onClick={(event) => onPick(valueAt(event))}
+      onPointerMove={(event) => {
+        if (event.pointerType === "mouse") onHover(valueAt(event));
+      }}
       onPointerLeave={() => onHover(0)}
       style={{
         position: "relative",
-        display: "inline-block",
-        cursor: "pointer",
+        border: "none",
+        background: "transparent",
+        padding: "2px",
+        fontSize: "clamp(34px, 9vw, 46px)",
         lineHeight: 1,
-        touchAction: "manipulation",
+        cursor: "pointer",
       }}
     >
-      <span style={{ color: "#d1d5db" }}>{STAR}</span>
+      <span style={{ color: "#e5e7eb" }}>{STAR}</span>
       <span
         style={{
           position: "absolute",
-          left: 0,
-          top: 0,
-          width: `${pct}%`,
+          left: 2,
+          top: 2,
+          width: `${fill * 100}%`,
           overflow: "hidden",
           whiteSpace: "nowrap",
-          color: "#f59e0b",
+          color: "#d97706",
+          pointerEvents: "none",
         }}
       >
         {STAR}
       </span>
-    </span>
+    </button>
   );
 }
 
@@ -55,175 +57,279 @@ export function RatingPage({ token: tokenProp, onDone }) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | sending | done | error
+  const [status, setStatus] = useState("idle");
   const [errMsg, setErrMsg] = useState("");
 
   const shown = hover || rating;
 
   const goHome = () => {
-    if (onDone) onDone();
-    else window.location.href = window.location.origin;
+    if (onDone) {
+      onDone();
+    } else {
+      window.location.href = window.location.origin;
+    }
   };
 
-  const submit = async () => {
-    if (!rating) return;
-    setStatus("sending");
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (!rating || status === "sending") return;
+
     if (!supabase) {
       setErrMsg("Supabase is not configured.");
       setStatus("error");
       return;
     }
-    const { error } = await supabase.rpc("submit_rating", {
-      p_token: token,
-      p_rating: rating,
-      p_comment: comment.trim() || null,
-    });
-    if (error) {
-      console.error("submit_rating failed:", error);
-      setErrMsg(error.message);
-      setStatus("error");
-    } else {
+
+    setStatus("sending");
+    setErrMsg("");
+
+    try {
+      const { error } = await supabase.rpc("submit_rating", {
+        p_token: token,
+        p_rating: rating,
+        p_comment: comment.trim() || null,
+      });
+
+      if (error) throw error;
+
       setStatus("done");
+    } catch (error) {
+      console.error("submit_rating failed:", error);
+      setErrMsg(error?.message || "Please try again.");
+      setStatus("error");
     }
   };
 
-  const ink = "#1f2937";
-  const box = {
+  const pageStyle = {
     minHeight: "100vh",
     width: "100%",
+    boxSizing: "border-box",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
-    boxSizing: "border-box",
-    background: "#fff7ed",
+    padding: 20,
+    background:
+      "linear-gradient(135deg, #fff7f9 0%, #fce7f3 50%, #fffaf5 100%)",
     fontFamily: "Arial, sans-serif",
-    color: ink,
+    color: "#332532",
   };
-  const card = {
-    background: "#fff",
-    borderRadius: 24,
-    maxWidth: 420,
+
+  const cardStyle = {
     width: "100%",
-    margin: "0 auto",
-    textAlign: "center",
-    boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+    maxWidth: 440,
+    background: "#ffffff",
+    border: "1px solid #f4dce8",
+    borderRadius: 24,
     overflow: "hidden",
-    color: ink,
+    boxShadow: "0 20px 55px rgba(116, 48, 82, 0.13)",
   };
-  const header = {
-    background: "linear-gradient(135deg,#f59e0b,#ec4899)",
-    color: "#fff",
-    padding: "24px 16px",
+
+  const headerStyle = {
+    padding: "30px 20px",
+    textAlign: "center",
+    color: "#ffffff",
+    background: "linear-gradient(135deg, #8f345f, #d45b8c)",
   };
-  const body = { padding: 28 };
-  const btn = {
-    background: "#f59e0b",
-    color: "#fff",
+
+  const bodyStyle = {
+    padding: "28px 24px",
+    textAlign: "center",
+  };
+
+  const buttonStyle = {
+    width: "100%",
+    padding: "15px 20px",
     border: "none",
     borderRadius: 999,
-    padding: "14px 28px",
-    fontWeight: "bold",
+    background: "linear-gradient(135deg, #a63f70, #d45b8c)",
+    color: "#ffffff",
     fontSize: 16,
+    fontWeight: "bold",
     cursor: "pointer",
   };
 
   const Brand = () => (
-    <div style={header}>
-      <div style={{ fontSize: 36, lineHeight: 1 }}>{FLOWER}</div>
-      <div style={{ fontSize: 22, fontWeight: "bold", marginTop: 6, color: "#fff" }}>
+    <div style={headerStyle}>
+      <div style={{ fontSize: 42, marginBottom: 10 }}>{FLOWER}</div>
+      <h1 style={{ margin: 0, fontSize: 22, color: "#ffffff" }}>
         Fleurs by Blossoms Craft
-      </div>
+      </h1>
+      <p style={{ margin: "8px 0 0", fontSize: 13, opacity: 0.9 }}>
+        A little love in every bloom
+      </p>
     </div>
   );
 
   if (!token) {
     return (
-      <div style={box}>
-        <div style={card}>
+      <main style={pageStyle}>
+        <section style={cardStyle}>
           <Brand />
-          <div style={body}>
-            <h2 style={{ color: ink }}>Invalid rating link</h2>
-            <button style={btn} onClick={goHome}>Back to menu</button>
+          <div style={bodyStyle}>
+            <h2>Invalid rating link</h2>
+            <p>Please open the rating link from your order.</p>
+            <button type="button" style={buttonStyle} onClick={goHome}>
+              Back to menu
+            </button>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
   if (status === "done") {
     return (
-      <div style={box}>
-        <div style={card}>
+      <main style={pageStyle}>
+        <section style={cardStyle}>
           <Brand />
-          <div style={body}>
-            <h2 style={{ color: ink }}>Thank you! {FLOWER}</h2>
-            <p style={{ color: "#6b7280" }}>Your feedback was received.</p>
-            <button style={btn} onClick={goHome}>Back to menu</button>
+          <div style={bodyStyle}>
+            <h2 style={{ fontSize: 28 }}>Thank you! 🌸</h2>
+            <p style={{ color: "#81727d", lineHeight: 1.6 }}>
+              Your feedback was received. Thank you for supporting our flower
+              shop!
+            </p>
+            <button type="button" style={buttonStyle} onClick={goHome}>
+              Back to menu
+            </button>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div style={box}>
-      <div style={card}>
+    <main style={pageStyle}>
+      <section style={cardStyle}>
         <Brand />
-        <div style={body}>
-          <h2 style={{ color: ink, margin: "0 0 6px" }}>Rate your order</h2>
-          <p style={{ color: "#6b7280", margin: 0 }}>How was your flower?</p>
 
-          <div style={{ fontSize: 44, margin: "14px 0 4px", userSelect: "none" }}>
-            {[0, 1, 2, 3, 4].map((i) => (
+        <form style={bodyStyle} onSubmit={submit}>
+          <p
+            style={{
+              display: "inline-block",
+              padding: "7px 13px",
+              borderRadius: 999,
+              background: "#fce7f3",
+              color: "#9d3d6c",
+              fontSize: 12,
+              fontWeight: "bold",
+            }}
+          >
+            YOUR FEEDBACK MATTERS
+          </p>
+
+          <h2 style={{ margin: "8px 0", fontSize: 28 }}>
+            Rate your order
+          </h2>
+
+          <p style={{ color: "#81727d", lineHeight: 1.6 }}>
+            How was your flower? We would love to hear from you.
+          </p>
+
+          <div
+            role="group"
+            aria-label="Choose your rating"
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 4,
+              margin: "18px 0 8px",
+            }}
+          >
+            {[0, 1, 2, 3, 4].map((index) => (
               <Star
-                key={i}
-                index={i}
+                key={index}
+                index={index}
                 value={shown}
-                onPick={(v) => { setRating(v); setHover(0); }}
+                onPick={(value) => {
+                  setRating(value);
+                  setHover(0);
+                }}
                 onHover={setHover}
               />
             ))}
           </div>
-          <p style={{ color: "#6b7280", margin: "0 0 14px", minHeight: 22 }}>
-            {shown ? `${shown} / 5` : "Tap the left half of a star for a half rating"}
+
+          <p
+            style={{
+              minHeight: 22,
+              margin: "0 0 22px",
+              color: shown ? "#a63f70" : "#9b8b96",
+              fontSize: 14,
+              fontWeight: shown ? "bold" : "normal",
+            }}
+          >
+            {shown
+              ? `${shown} / 5 stars`
+              : "Tap a star to rate · Half-star ratings available"}
           </p>
 
+          <label
+            htmlFor="rating-comment"
+            style={{
+              display: "block",
+              textAlign: "left",
+              marginBottom: 8,
+              fontSize: 14,
+              fontWeight: "bold",
+            }}
+          >
+            Your comment <span style={{ fontWeight: "normal" }}>(optional)</span>
+          </label>
+
           <textarea
+            id="rating-comment"
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Tell us more (optional)"
-            rows={3}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="Tell us what you loved..."
+            rows={4}
+            maxLength={1000}
             style={{
               width: "100%",
               boxSizing: "border-box",
-              borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              padding: 12,
-              marginBottom: 16,
+              border: "1px solid #eadde5",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 18,
               fontFamily: "inherit",
-              color: ink,
-              background: "#fff",
+              fontSize: 15,
+              resize: "vertical",
             }}
           />
 
           {status === "error" && (
-            <p style={{ color: "#dc2626", margin: "0 0 12px" }}>
-              Something went wrong. Please try again.
-              <br />
-              <small>{errMsg}</small>
+            <p
+              role="alert"
+              style={{
+                color: "#b91c1c",
+                background: "#fff1f2",
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 13,
+                overflowWrap: "anywhere",
+              }}
+            >
+              Failed to submit your rating. {errMsg}
             </p>
           )}
 
           <button
-            style={{ ...btn, opacity: rating ? 1 : 0.5 }}
+            type="submit"
             disabled={!rating || status === "sending"}
-            onClick={submit}
+            style={{
+              ...buttonStyle,
+              opacity: !rating || status === "sending" ? 0.6 : 1,
+              cursor: !rating || status === "sending" ? "not-allowed" : "pointer",
+            }}
           >
-            {status === "sending" ? "Sending..." : "Submit"}
+            {status === "sending" ? "Sending..." : "Submit rating"}
           </button>
-        </div>
-      </div>
-    </div>
+
+          <p style={{ color: "#a0929b", fontSize: 12, marginTop: 18 }}>
+            Thank you for choosing Fleurs 🌸
+          </p>
+        </form>
+      </section>
+    </main>
   );
 }
