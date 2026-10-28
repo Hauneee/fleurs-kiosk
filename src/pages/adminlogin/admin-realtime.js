@@ -1,7 +1,7 @@
 
 /* ==========================================
    FLEURS ADMIN REALTIME NOTIFICATIONS
-   File: admin-realtime.js
+   File: src/pages/adminlogin/admin-realtime.js
    ========================================== */
 
 (() => {
@@ -199,7 +199,6 @@
 
   function renderNotifications() {
     const root = document.getElementById(ROOT_ID);
-
     if (!root) return;
 
     const count = root.querySelector(".art-count");
@@ -279,10 +278,7 @@
     const refreshButton = $("#topRefresh");
 
     if (refreshButton?.parentElement) {
-      refreshButton.parentElement.insertBefore(
-        root,
-        refreshButton
-      );
+      refreshButton.parentElement.insertBefore(root, refreshButton);
     } else {
       const topbar = $(".topbar, .top-bar, header");
       (topbar || document.body).appendChild(root);
@@ -294,19 +290,17 @@
     });
 
     root.querySelector(".art-clear").addEventListener("click", () => {
-      unreadCount = 0;
-
       notifications = notifications.map((item) => ({
         ...item,
         read: true
       }));
 
+      unreadCount = 0;
       renderNotifications();
     });
 
     root.querySelector(".art-list").addEventListener("click", (event) => {
       const button = event.target.closest("[data-order-id]");
-
       if (!button) return;
 
       const id = button.getAttribute("data-order-id");
@@ -349,7 +343,7 @@
   function pushOrderNotification(order) {
     if (order?.id == null) return;
 
-    // Safety check: never notify without proof.
+    // Never notify before a proof path is saved.
     if (!order.proof_photo_path) return;
 
     const id = String(order.id);
@@ -432,8 +426,7 @@
     client = supabaseClient;
     activeUserId = userId;
 
-    // Mark existing orders as known so they do not trigger
-    // notifications when the admin opens the dashboard.
+    // Existing orders should not trigger new notifications at startup.
     try {
       const { data, error } = await client
         .from("orders")
@@ -461,7 +454,7 @@
     channel = client
       .channel(CHANNEL_NAME)
 
-      // New order: notify only if the proof is already saved.
+      // INSERT: notify only if proof already exists.
       .on(
         "postgres_changes",
         {
@@ -478,7 +471,8 @@
         }
       )
 
-      // Existing order: notify when the proof is added later.
+      // UPDATE: notify when a saved proof becomes available.
+      // This does not depend on payload.old containing the old path.
       .on(
         "postgres_changes",
         {
@@ -488,12 +482,8 @@
         },
         (payload) => {
           const order = payload.new || {};
-          const oldOrder = payload.old || {};
 
           if (!order.proof_photo_path) return;
-
-          // Notify only on the transition from no proof to proof.
-          if (oldOrder.proof_photo_path) return;
 
           pushOrderNotification(order);
         }

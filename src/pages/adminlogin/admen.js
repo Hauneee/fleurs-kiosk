@@ -439,25 +439,67 @@
     );
   }
 
-  
-async function loadOrders() {
-  const { data, error } = await sb
-    .from(ORDERS_TABLE)
-    .select(`*, ${ITEMS_RELATION}(*)`)
-    .not("proof_photo_path", "is", null)
-    .neq("proof_photo_path", "")
-    .limit(5000);
+  // ==========================================
+  // DATA LOADERS
+  // ==========================================
 
-  if (error) throw error;
+  async function loadOrders() {
+    const { data, error } = await sb
+      .from(ORDERS_TABLE)
+      .select(`*, ${ITEMS_RELATION}(*)`)
+      .limit(5000);
 
-  orders = data || [];
-}
+    if (error) {
+      console.error("[Admin] loadOrders failed:", error);
+      throw error;
+    }
+
+    // Hide CASH orders that have no proof photo yet.
+    // GCash orders never have a proof photo (verified online), so they always show.
+    // To show every order, replace this with: orders = data || [];
+    orders = (data || []).filter(o =>
+      paymentKind(o) !== "cash" || !!proofValue(o)
+    );
+  }
+
+  async function loadProducts() {
+    const { data, error } = await sb
+      .from("products")
+      .select("*")
+      .order("name", { ascending: true })
+      .limit(2000);
+
+    if (error) {
+      console.error("[Admin] loadProducts failed:", error);
+      throw error;
+    }
+
+    products = data || [];
+  }
+
+  // Returns "" on success, or an error message string on failure
+  // (refreshAll() expects this).
+  async function loadFeedback() {
+    try {
+      const { data, error } = await sb.rpc(RATINGS_RPC);
+
+      if (error) throw error;
+
+      feedback = Array.isArray(data) ? data : [];
+      return "";
+    } catch (error) {
+      console.error("[Admin] loadFeedback failed:", error);
+      feedback = [];
+      return error?.message || String(error);
+    }
+  }
 
   // ==========================================
   // PRODUCTS & INVENTORY
   // ==========================================
 
   const INVENTORY_LOW_STOCK_LIMIT = 10;
+  const MAX_STOCK = 100; // maximum pieces allowed per product
 
   function inventoryProducts() {
     return products.filter(p =>
@@ -659,6 +701,7 @@ async function loadOrders() {
                         type="number"
                         name="stock"
                         min="0"
+                        max="${MAX_STOCK}"
                         step="1"
                         value="${stock}"
                         required
@@ -739,10 +782,11 @@ async function loadOrders() {
     if (
       rawValue === "" ||
       !Number.isSafeInteger(quantity) ||
-      quantity < 0
+      quantity < 0 ||
+      quantity > MAX_STOCK
     ) {
       inventoryMessage(
-        "Stock must be a whole number greater than or equal to zero.",
+        `Stock must be a whole number from 0 to ${MAX_STOCK}.`,
         "error"
       );
 
@@ -870,6 +914,8 @@ async function loadOrders() {
   }
 
   function showPage(page) {
+    if (!$("page-" + page)) page = "dashboard";
+
     activePage = page;
 
     document.querySelectorAll(".page").forEach(el =>
@@ -888,7 +934,8 @@ async function loadOrders() {
       customers: "Customers",
       feedback: "Feedback & Ratings",
       reports: "Sales Reports",
-      inventory: "Products & Inventory"
+      inventory: "Products & Inventory",
+      analytics: "Analytics"
     };
 
     $("topTitle").textContent = titles[page] || "Dashboard";
@@ -900,6 +947,7 @@ async function loadOrders() {
     if (page === "feedback") renderFeedback();
     if (page === "reports") renderReport();
     if (page === "inventory") renderInventory();
+    if (page === "dashboard" || page === "analytics") renderAnalytics();
   }
 
   function renderAll() {
@@ -909,6 +957,7 @@ async function loadOrders() {
     renderFeedback();
     renderReport();
     renderInventory();
+    renderAnalytics();
   }
 
   function renderDashboard() {
@@ -1504,40 +1553,45 @@ async function loadOrders() {
 
   // PROOF PHOTO
   // Uses a signed URL so it works whether the order-proofs bucket
-  // is private or public. Needs a SELECT policy on storage.objects
-  // for the "order-proofs" bucket (see the SQL policy in the chat).
- async function resolveProofUrl(value) {
-  if (!value || typeof value !== "string") return "";
+  // is private or public. Tries the path exactly as saved first, then
+  // without the bucket / "proofs/" prefixes.
+  async function resolveProofUrl(value) {
+    if (!value || typeof value !== "string") return "";
 
-  const raw = value.trim();
+    const raw = value.trim();
 
-  // Already a complete URL
-  if (/^https?:\/\//i.test(raw)) return raw;
+    // Already a complete URL
+    if (/^https?:\/\//i.test(raw)) return raw;
 
-  if (!PROOF_BUCKET || !sb) return "";
+    if (!PROOF_BUCKET || !sb) return "";
 
-  let path = raw.replace(/^\/+/, "");
+    const base = raw.replace(/^\/+/, "");
 
-  // Remove bucket name if it was accidentally included in the stored path
-  path = path.replace(/^order-proofs\//i, "");
+    const candidates = [...new Set([
+      base,
+      base.replace(/^order-proofs\//i, ""),
+      base.replace(/^order-proofs\//i, "").replace(/^proofs\//i, "")
+    ])];
 
-  // Remove legacy folder prefix if present
-  path = path.replace(/^proofs\//i, "");
+    let lastError = null;
 
-  const { data, error } = await sb.storage
-    .from(PROOF_BUCKET)
-    .createSignedUrl(path, 3600);
+    for (const path of candidates) {
+      const { data, error } = await sb.storage
+        .from(PROOF_BUCKET)
+        .createSignedUrl(path, 3600);
 
-  if (error) {
-    console.error("Proof photo URL failed:", error.message, {
+      if (!error && data?.signedUrl) return data.signedUrl;
+
+      lastError = error;
+    }
+
+    console.error("Proof photo URL failed:", lastError?.message, {
       originalValue: raw,
-      storagePath: path
+      triedPaths: candidates
     });
+
     return "";
   }
-
-  return data?.signedUrl || "";
-}
 
   function proofSection(o) {
     const raw = proofValue(o);
@@ -2477,7 +2531,7 @@ async function loadOrders() {
 
             <div class="pm-field">
               <label for="pmStock" id="pmStockLabel">Initial stock</label>
-              <input id="pmStock" type="number" min="0" step="1"
+              <input id="pmStock" type="number" min="0" max="${MAX_STOCK}" step="1"
                      inputmode="numeric" placeholder="0" required>
             </div>
           </div>
@@ -2811,8 +2865,8 @@ async function loadOrders() {
       return;
     }
 
-    if (stockRaw === "" || !Number.isSafeInteger(stock) || stock < 0) {
-      setProductMessage("Stock must be a whole number, zero or higher.");
+    if (stockRaw === "" || !Number.isSafeInteger(stock) || stock < 0 || stock > MAX_STOCK) {
+      setProductMessage(`Stock must be a whole number from 0 to ${MAX_STOCK}.`);
       $("pmStock").focus();
       return;
     }
@@ -3111,6 +3165,780 @@ async function loadOrders() {
     }
   }
 
+  // ==========================================
+  // ANALYTICS PAGE
+  // Pink dashboard: overview cards, Revenue + Sales line charts, Customers pie.
+  // Builds its own nav button, page and styles; no admin.html changes needed.
+  // ==========================================
+
+  const AN_COLORS = {
+    Solo: "#8b7bff",
+    Triple: "#ff9a8f",
+    Bouquet: "#3fc3e0",
+    Other: "#b9a9a6"
+  };
+
+  const AN_MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  const AN_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const AN_MODES = [
+    ["daily", "Daily"],
+    ["weekly", "Weekly"],
+    ["monthly", "Monthly"],
+    ["yearly", "Yearly"]
+  ];
+
+  const AN_PREV = {
+    daily: "yesterday",
+    weekly: "last week",
+    monthly: "last month",
+    yearly: "last year"
+  };
+
+  const AN_UP = "#16a085";
+  const AN_DOWN = "#e0566b";
+
+  let anMode = "daily";
+  let anRef = startOfDay(new Date());
+  let anView = null;
+
+  function injectAnalyticsStyles() {
+    if ($("anStyles")) return;
+
+    const style = document.createElement("style");
+
+    style.id = "anStyles";
+
+    style.textContent = `
+      #page-dashboard > :not(#anBody){display:none !important}
+      #anBody{--an-bg:#fdeceb;--an-card:#fee1dd;--an-ink:#6b4a45;--an-accent:#f9a39a;--an-accent-dark:#f58f85;background:var(--an-bg);border-radius:22px;padding:22px;color:var(--an-ink)}
+      #anBody .an-h{font-size:20px;font-weight:700;margin:0 0 4px;color:#5a3e3a}
+      #anBody .an-sub{font-size:13px;opacity:.7;margin:0 0 14px}
+      #anBody .an-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+      #anBody .an-card{background:var(--an-card);border-radius:18px;padding:16px 18px;min-width:0}
+      #anBody .an-card-title{font-weight:700;font-size:15px}
+      #anBody .an-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+      #anBody .an-card-num{font-size:28px;font-weight:500;line-height:1.1;overflow-wrap:anywhere}
+      #anBody .an-card-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.6);font-size:20px;flex:none}
+      #anBody .an-delta{display:block;font-size:12px;margin-top:8px}
+      #anBody .an-delta.up{color:#2f8f5b}
+      #anBody .an-delta.down{color:#c0495d}
+      #anBody .an-delta.flat{opacity:.7}
+      #anBody .an-panel{background:var(--an-card);border-radius:20px;padding:20px 22px;min-width:0}
+      #anBody .an-panel.spaced{margin-bottom:18px}
+      #anBody .an-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+      #anBody .an-kicker{font-size:12px;font-weight:700;opacity:.7;letter-spacing:.06em;text-transform:uppercase}
+      #anBody .an-big{font-size:34px;font-weight:700;line-height:1.15;color:#5a3e3a;overflow-wrap:anywhere}
+      #anBody .an-chg{font-size:13px;font-weight:600;margin-top:2px}
+      #anBody .an-chg span{font-weight:400;opacity:.7;margin-left:4px;color:var(--an-ink)}
+      #anBody .an-chg.up{color:#16a085}
+      #anBody .an-chg.down{color:#e0566b}
+      #anBody .an-chg.flat{opacity:.75}
+      #anBody .an-tools{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+      #anBody .an-seg{display:inline-flex;background:#fbc6bf;border-radius:999px;padding:3px}
+      #anBody .an-seg button{border:0;background:transparent;padding:6px 16px;border-radius:999px;font:inherit;font-size:12px;cursor:pointer;color:#fff}
+      #anBody .an-seg button.active{background:var(--an-accent-dark);color:#fff;font-weight:600}
+      #anBody .an-nav{display:inline-flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+      #anBody .an-nav button{border:0;background:rgba(255,255,255,.65);width:30px;height:30px;border-radius:50%;cursor:pointer;color:inherit;font-size:18px;line-height:1}
+      #anBody .an-nav button:disabled{opacity:.35;cursor:not-allowed}
+      #anBody .an-chartwrap{position:relative;width:100%;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:crosshair}
+      #anBody .an-chartwrap svg{width:100%;height:auto;display:block}
+      #anBody .an-chartwrap text{fill:#6e5b57;font-size:10px}
+      #anBody .an-tip{position:absolute;pointer-events:none;background:#5a3e3a;color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.4;transform:translate(14px,-50%);white-space:nowrap;box-shadow:0 6px 18px rgba(90,62,58,.25);z-index:2}
+      #anBody .an-tip.flip{transform:translate(calc(-100% - 14px),-50%)}
+      #anBody .an-tip[hidden]{display:none}
+      #anBody .an-tip-d{opacity:.75}
+      #anBody .an-tip-v{font-size:17px;font-weight:700}
+      #anBody .an-tip-s{opacity:.75}
+      #anBody .an-panel h3{margin:0 0 14px;font-size:17px;font-weight:700;color:#5a3e3a}
+      #anBody .an-rows{display:grid;gap:14px}
+      #anBody .an-row{display:grid;grid-template-columns:96px 1fr auto;gap:14px;align-items:center;font-size:13px}
+      #anBody .an-row b{display:flex;align-items:center;gap:8px;font-weight:600}
+      #anBody .an-row b i{width:10px;height:10px;border-radius:50%;display:inline-block}
+      #anBody .an-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.65);overflow:hidden}
+      #anBody .an-bar i{display:block;height:100%;border-radius:99px}
+      #anBody .an-row em{font-style:normal;text-align:right}
+      #anBody .an-note{font-size:12px;opacity:.7;margin-top:10px;line-height:1.4}
+      #anBody .an-empty{padding:34px 10px;text-align:center;opacity:.7;font-size:14px}
+      @media (max-width:1000px){#anBody .an-cards{grid-template-columns:repeat(2,1fr)}}
+      @media (max-width:760px){#anBody{padding:14px}#anBody .an-tools{align-items:flex-start}#anBody .an-big{font-size:28px}#anBody .an-row{grid-template-columns:80px 1fr auto}}
+      @media (max-width:480px){#anBody .an-cards{grid-template-columns:1fr}}
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  // Y-axis top value that splits evenly into 4 whole-number steps.
+  function anNiceTop(maxV) {
+    const raw = Math.max(maxV, 0) / 4;
+
+    if (raw <= 1) return 4;
+
+    const e = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / e;
+    const nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+
+    return nf * e * 4;
+  }
+
+  const anFmtDate = (d, o) => d.toLocaleDateString("en-PH", o);
+  const anHourLabel = h => (h % 12 || 12) + (h < 12 ? "a" : "p");
+  const anHourTip = h => (h % 12 || 12) + ":00 " + (h < 12 ? "AM" : "PM");
+
+  // The time window, bucket labels and tooltip text for each view.
+  function anRange(mode, ref) {
+    const y = ref.getFullYear(), m = ref.getMonth(), d = ref.getDate();
+
+    if (mode === "weekly") {
+      const a = new Date(y, m, d - ((ref.getDay() + 6) % 7));
+      const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 7);
+      const last = new Date(b.getFullYear(), b.getMonth(), b.getDate() - 1);
+
+      return {
+        mode, a, b, n: 7,
+        label: `${anFmtDate(a, { month: "short", day: "numeric" })} – ${anFmtDate(last, { month: "short", day: "numeric", year: "numeric" })}`,
+        labels: AN_WEEKDAYS,
+        tips: AN_WEEKDAYS.map((_, i) => anFmtDate(
+          new Date(a.getFullYear(), a.getMonth(), a.getDate() + i),
+          { weekday: "long", month: "short", day: "numeric" }
+        )),
+        idx: t => (t.getDay() + 6) % 7
+      };
+    }
+
+    if (mode === "monthly") {
+      const a = new Date(y, m, 1);
+      const b = new Date(y, m + 1, 1);
+      const n = new Date(y, m + 1, 0).getDate();
+
+      return {
+        mode, a, b, n,
+        label: anFmtDate(a, { month: "long", year: "numeric" }),
+        labels: Array.from({ length: n }, (_, i) =>
+          i === 0 || (i + 1) % 5 === 0 ? String(i + 1) : ""),
+        tips: Array.from({ length: n }, (_, i) => anFmtDate(
+          new Date(y, m, i + 1),
+          { month: "short", day: "numeric", year: "numeric" }
+        )),
+        idx: t => t.getDate() - 1
+      };
+    }
+
+    if (mode === "yearly") {
+      return {
+        mode,
+        a: new Date(y, 0, 1),
+        b: new Date(y + 1, 0, 1),
+        n: 12,
+        label: String(y),
+        labels: AN_MONTHS,
+        tips: AN_MONTHS.map((_, i) => anFmtDate(
+          new Date(y, i, 1), { month: "long", year: "numeric" }
+        )),
+        idx: t => t.getMonth()
+      };
+    }
+
+    const a = new Date(y, m, d);
+
+    return {
+      mode: "daily",
+      a,
+      b: new Date(y, m, d + 1),
+      n: 24,
+      label: anFmtDate(a, { weekday: "long", month: "short", day: "numeric", year: "numeric" }),
+      labels: Array.from({ length: 24 }, (_, i) => i % 3 === 0 ? anHourLabel(i) : ""),
+      tips: Array.from({ length: 24 }, (_, i) => anHourTip(i)),
+      idx: t => t.getHours()
+    };
+  }
+
+  function anShift(mode, ref, dir) {
+    const y = ref.getFullYear(), m = ref.getMonth(), d = ref.getDate();
+
+    if (mode === "weekly") return new Date(y, m, d + 7 * dir);
+    if (mode === "monthly") return new Date(y, m + dir, 1);
+    if (mode === "yearly") return new Date(y + dir, 0, 1);
+
+    return new Date(y, m, d + dir);
+  }
+
+  function anData(mode, ref) {
+    const r = anRange(mode, ref);
+    const sales = Array(r.n).fill(0);
+    const count = Array(r.n).fill(0);
+
+    const days = null;
+
+    orders.forEach(o => {
+      const d = dateValue(createdOf(o));
+
+      if (!d || d < r.a || d >= r.b) return;
+
+      const i = r.idx(d);
+
+      sales[i] += totalOf(o);
+      count[i]++;
+
+      if (days) days[i][d.getDate() - 1] += totalOf(o);
+    });
+
+    // Yearly view is drawn as candles: open/close = first/last day of the month.
+    let candles = null;
+
+    if (days) {
+      const now = new Date();
+
+      candles = days.map((arr, mi) => {
+        const dim = new Date(r.a.getFullYear(), mi + 1, 0).getDate();
+        const isNow = r.a.getFullYear() === now.getFullYear() && mi === now.getMonth();
+        const vals = arr.slice(0, isNow ? now.getDate() : dim);
+
+        return {
+          o: vals[0],
+          c: vals[vals.length - 1],
+          h: Math.max(...vals),
+          l: Math.min(...vals)
+        };
+      });
+    }
+
+    return {
+      ...r,
+      sales,
+      count,
+      candles,
+      total: sales.reduce((a, b) => a + b, 0),
+      orderCount: count.reduce((a, b) => a + b, 0)
+    };
+  }
+
+  // Builds the SVG for the current view. Each view has its own chart type:
+  // daily = pink area, weekly = purple line, monthly = line + average, yearly = teal area.
+  function anChartModel(data) {
+    const W = 900, H = 340, L = 62, R = 20, T = 18, B = 34;
+    const iw = W - L - R;
+    const ih = H - T - B;
+    const n = data.n;
+    const mode = data.mode;
+    const banded = false;
+
+    const maxV = Math.max(0, ...data.sales);
+
+    const top = anNiceTop(maxV);
+    const y = v => T + ih - (v / top) * ih;
+
+    const xs = Array.from({ length: n }, (_, i) =>
+      banded
+        ? L + (iw * (i + 0.5)) / n
+        : L + (n <= 1 ? iw / 2 : (iw * i) / (n - 1))
+    );
+
+    const vals = data.sales;
+
+    let g = `<defs>
+      <linearGradient id="anGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#f58f85" stop-opacity=".55"/>
+        <stop offset="100%" stop-color="#f58f85" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="anGradTeal" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3fc3e0" stop-opacity=".5"/>
+        <stop offset="100%" stop-color="#3fc3e0" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="anBarGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ff9a8f"/>
+        <stop offset="100%" stop-color="#f58f85"/>
+      </linearGradient>
+    </defs>`;
+
+    for (let k = 0; k <= 4; k++) {
+      const v = (top * k) / 4;
+      const yy = y(v).toFixed(1);
+
+      g += `<line x1="${L}" y1="${yy}" x2="${W - R}" y2="${yy}" stroke="#f3c4bf" stroke-dasharray="3 3"/>`;
+      g += `<text x="${L - 8}" y="${(Number(yy) + 3).toFixed(1)}" text-anchor="end">${esc(compactMoney(v))}</text>`;
+    }
+
+    data.labels.forEach((lab, i) => {
+      if (!lab) return;
+
+      g += `<line x1="${xs[i].toFixed(1)}" y1="${T}" x2="${xs[i].toFixed(1)}" y2="${T + ih}" stroke="#f3c4bf" stroke-dasharray="3 3" opacity=".6"/>`;
+      g += `<text x="${xs[i].toFixed(1)}" y="${H - 10}" text-anchor="middle">${esc(lab)}</text>`;
+    });
+
+    g += `<line x1="${L}" y1="${T + ih}" x2="${W - R}" y2="${T + ih}" stroke="#e9aaa3"/>`;
+
+    const pts = data.sales.map((v, i) => `${xs[i].toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+
+    if (mode === "daily") {
+      g += `<path d="M${xs[0].toFixed(1)},${y(0).toFixed(1)} L${pts.replace(/ /g, " L")} L${xs[n - 1].toFixed(1)},${y(0).toFixed(1)} Z" fill="url(#anGrad)"/>`;
+      g += `<polyline points="${pts}" fill="none" stroke="#f58f85" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+    } else if (mode === "weekly") {
+      g += `<polyline points="${pts}" fill="none" stroke="#8b7bff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+      data.sales.forEach((v, i) => {
+        g += `<circle cx="${xs[i].toFixed(1)}" cy="${y(v).toFixed(1)}" r="4.5" fill="#fff" stroke="#8b7bff" stroke-width="2"/>`;
+      });
+    } else if (mode === "monthly") {
+      const ma = data.sales.map((_, i) => {
+        const from = Math.max(0, i - 6);
+        const slice = data.sales.slice(from, i + 1);
+
+        return slice.reduce((a, b) => a + b, 0) / slice.length;
+      });
+
+      const maPts = ma.map((v, i) => `${xs[i].toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+
+      g += `<polyline points="${pts}" fill="none" stroke="#8b7bff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+      g += `<polyline points="${maPts}" fill="none" stroke="#3fc3e0" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+
+      data.sales.forEach((v, i) => {
+        if (v > 0) {
+          g += `<circle cx="${xs[i].toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.8" fill="#fff" stroke="#8b7bff" stroke-width="1.5"/>`;
+        }
+      });
+    } else {
+      g += `<path d="M${xs[0].toFixed(1)},${y(0).toFixed(1)} L${pts.replace(/ /g, " L")} L${xs[n - 1].toFixed(1)},${y(0).toFixed(1)} Z" fill="url(#anGradTeal)"/>`;
+      g += `<polyline points="${pts}" fill="none" stroke="#3fc3e0" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+      data.sales.forEach((v, i) => {
+        g += `<circle cx="${xs[i].toFixed(1)}" cy="${y(v).toFixed(1)}" r="4" fill="#fff" stroke="#3fc3e0" stroke-width="2"/>`;
+      });
+    }
+
+    if (!maxV) {
+      g += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" style="font-size:13px">No sales in this period</text>`;
+    }
+
+    g += `<g id="anCross" style="display:none;pointer-events:none">
+      <line id="anCv" y1="${T}" y2="${T + ih}" stroke="#6b4a45" stroke-dasharray="4 4" opacity=".6"/>
+      <line id="anCh" x1="${L}" x2="${W - R}" stroke="#6b4a45" stroke-dasharray="4 4" opacity=".6"/>
+      <rect id="anTagBg" x="2" width="${L - 6}" height="18" rx="4" fill="#6b4a45"/>
+      <text id="anTag" x="${L - 10}" text-anchor="end" style="fill:#fff;font-size:10px;font-weight:600"></text>
+      <circle id="anDot" r="4.5" fill="#fff" stroke="#f58f85" stroke-width="2.2"/>
+    </g>`;
+
+    return { g, W, H, xs, y, vals };
+  }
+
+  // Hover (mouse) or press-and-hold (touch) shows a crosshair and the amount sold.
+  function anBindChart(root) {
+    const wrap = root.querySelector(".an-chartwrap");
+
+    if (!wrap || !anView) return;
+
+    const { data, model } = anView;
+    const svg = wrap.querySelector("svg");
+    const tip = wrap.querySelector(".an-tip");
+    const cross = svg.querySelector("#anCross");
+    const part = id => svg.querySelector("#" + id);
+
+    let holding = false;
+    let timer = null;
+    let sx = 0;
+    let sy = 0;
+
+    const tipHTML = i => {
+      let h = `<div class="an-tip-d">${esc(data.tips[i])}</div>
+        <div class="an-tip-v">${esc(money(data.sales[i]))}</div>
+        <div class="an-tip-s">${data.count[i]} order(s)</div>`;
+
+      if (data.candles) {
+        const c = data.candles[i];
+
+        h += `<div class="an-tip-s">Daily O ${esc(compactMoney(c.o))} · H ${esc(compactMoney(c.h))} · L ${esc(compactMoney(c.l))} · C ${esc(compactMoney(c.c))}</div>`;
+      }
+
+      return h;
+    };
+
+    const hide = () => {
+      cross.style.display = "none";
+      tip.hidden = true;
+    };
+
+    const show = e => {
+      const rect = svg.getBoundingClientRect();
+
+      if (!rect.width) return;
+
+      const px = (e.clientX - rect.left) * (model.W / rect.width);
+
+      let best = 0;
+      let bd = Infinity;
+
+      model.xs.forEach((x, i) => {
+        const dd = Math.abs(x - px);
+
+        if (dd < bd) {
+          bd = dd;
+          best = i;
+        }
+      });
+
+      const x = model.xs[best];
+      const v = model.vals[best];
+      const yy = model.y(v);
+
+      part("anCv").setAttribute("x1", x);
+      part("anCv").setAttribute("x2", x);
+      part("anCh").setAttribute("y1", yy);
+      part("anCh").setAttribute("y2", yy);
+      part("anDot").setAttribute("cx", x);
+      part("anDot").setAttribute("cy", yy);
+      part("anTagBg").setAttribute("y", yy - 9);
+      part("anTag").setAttribute("y", yy + 3.5);
+      part("anTag").textContent = compactMoney(v);
+
+      cross.style.display = "";
+
+      tip.innerHTML = tipHTML(best);
+      tip.hidden = false;
+
+      const left = (x / model.W) * rect.width;
+
+      tip.style.left = left + "px";
+      tip.style.top = (yy / model.H) * rect.height + "px";
+      tip.classList.toggle("flip", left > rect.width * 0.6);
+    };
+
+    wrap.addEventListener("pointerdown", e => {
+      if (e.pointerType === "mouse") {
+        show(e);
+        return;
+      }
+
+      sx = e.clientX;
+      sy = e.clientY;
+
+      clearTimeout(timer);
+
+      timer = setTimeout(() => {
+        holding = true;
+        show(e);
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, 280);
+    });
+
+    wrap.addEventListener("pointermove", e => {
+      if (e.pointerType === "mouse" || holding) {
+        show(e);
+      } else if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) {
+        clearTimeout(timer);
+      }
+    });
+
+    ["pointerup", "pointercancel"].forEach(type => {
+      wrap.addEventListener(type, e => {
+        if (e.pointerType === "mouse") return;
+
+        clearTimeout(timer);
+        holding = false;
+        hide();
+      });
+    });
+
+    wrap.addEventListener("pointerleave", e => {
+      if (e.pointerType === "mouse") hide();
+    });
+
+    wrap.addEventListener("touchmove", e => {
+      if (holding) e.preventDefault();
+    }, { passive: false });
+
+    wrap.addEventListener("contextmenu", e => e.preventDefault());
+  }
+
+  function anDelta(cur, prev) {
+    if (!prev) {
+      return cur
+        ? `<span class="an-delta flat">New this month</span>`
+        : `<span class="an-delta flat">0.00%</span>`;
+    }
+
+    const p = ((cur - prev) / prev) * 100;
+    const cls = p > 0 ? "up" : p < 0 ? "down" : "flat";
+
+    return `<span class="an-delta ${cls}">${p > 0 ? "+" : ""}${p.toFixed(2)}% vs last month</span>`;
+  }
+
+  function anStats(list) {
+    return {
+      orders: list.length,
+      units: list.reduce((sum, o) => sum + orderUnits(o), 0),
+      customers: uniqueCustomers(list).length,
+      sales: list.reduce((sum, o) => sum + totalOf(o), 0)
+    };
+  }
+
+  // Sales per product type (Solo / Triple / Bouquet) inside the chosen period.
+  function anCategoryTotals(data) {
+    const catMap = new Map(
+      (Array.isArray(products) ? products : []).map(p => [
+        String(p.id ?? ""),
+        categoryFromValue(first(p, [
+          "category", "product_category", "type", "product_type"
+        ], ""))
+      ])
+    );
+
+    const names = [...PRODUCT_CATEGORIES, "Other"];
+    const rev = {};
+    const units = {};
+
+    names.forEach(nm => {
+      rev[nm] = 0;
+      units[nm] = 0;
+    });
+
+    orders.forEach(o => {
+      const d = dateValue(createdOf(o));
+
+      if (!d || d < data.a || d >= data.b) return;
+
+      itemList(o).forEach(item => {
+        const cat = categoryOf(item, catMap);
+        const nm = names.includes(cat) ? cat : "Other";
+
+        rev[nm] += itemSubtotal(item);
+        units[nm] += itemQty(item);
+      });
+    });
+
+    return names
+      .filter(nm => nm !== "Other" || rev[nm] > 0)
+      .map(nm => ({ name: nm, color: AN_COLORS[nm], revenue: rev[nm], units: units[nm] }));
+  }
+
+  function renderAnalytics() {
+    const root = $("anBody");
+
+    if (!root) return;
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+
+    const inRange = (a, b) => orders.filter(o => {
+      const d = dateValue(createdOf(o));
+
+      return d && d >= a && d < b;
+    });
+
+    const cur = anStats(inRange(new Date(y, m, 1), new Date(y, m + 1, 1)));
+    const prev = anStats(inRange(new Date(y, m - 1, 1), new Date(y, m, 1)));
+
+    const monthName = now.toLocaleDateString("en-PH", {
+      month: "long",
+      year: "numeric"
+    });
+
+    const cards = [
+      ["New Orders", cur.orders.toLocaleString(), "🛒", anDelta(cur.orders, prev.orders)],
+      ["Items Sold", cur.units.toLocaleString(), "🌸", anDelta(cur.units, prev.units)],
+      ["Customers", cur.customers.toLocaleString(), "👥", anDelta(cur.customers, prev.customers)],
+      ["Sales", money(cur.sales), "💰", anDelta(cur.sales, prev.sales)]
+    ].map(([title, num, ico, delta]) => `
+      <div class="an-card">
+        <div class="an-card-title">${esc(title)}</div>
+        <div class="an-card-row">
+          <div class="an-card-num">${esc(num)}</div>
+          <div class="an-card-ico" aria-hidden="true">${ico}</div>
+        </div>
+        ${delta}
+      </div>`).join("");
+
+    const data = anData(anMode, anRef);
+    const before = anData(anMode, anShift(anMode, anRef, -1));
+    const canNext = anRange(anMode, anShift(anMode, anRef, 1)).a <= now;
+    const model = anChartModel(data);
+
+    anView = { data, model };
+
+    let chg;
+
+    if (before.total > 0) {
+      const p = ((data.total - before.total) / before.total) * 100;
+      const cls = p > 0 ? "up" : p < 0 ? "down" : "flat";
+
+      chg = `<div class="an-chg ${cls}">${p > 0 ? "▲ +" : p < 0 ? "▼ " : ""}${p.toFixed(2)}%<span>vs ${AN_PREV[anMode]}</span></div>`;
+    } else {
+      chg = `<div class="an-chg flat">${data.total > 0 ? "No sales " + AN_PREV[anMode] : "—"}</div>`;
+    }
+
+    const cats = anCategoryTotals(data);
+    const maxCat = Math.max(1, ...cats.map(c => c.revenue));
+
+    const rows = cats.map(c => `
+      <div class="an-row">
+        <b><i style="background:${c.color}"></i>${esc(c.name)}</b>
+        <div class="an-bar"><i style="width:${(c.revenue / maxCat) * 100}%;background:${c.color}"></i></div>
+        <em>${esc(money(c.revenue))} · ${c.units} item(s)</em>
+      </div>`).join("");
+
+    root.innerHTML = `
+      <h2 class="an-h">Overview</h2>
+      <div class="an-sub">${esc(monthName)} compared with last month</div>
+      <div class="an-cards">${cards}</div>
+
+      <div class="an-panel spaced">
+        <div class="an-top">
+          <div>
+            <div class="an-kicker">Sales</div>
+            <div class="an-big">${esc(money(data.total))}</div>
+            ${chg}
+          </div>
+
+          <div class="an-tools">
+            <div class="an-seg">
+              ${AN_MODES.map(([key, name]) => `
+                <button type="button" data-an-mode="${key}"
+                  class="${anMode === key ? "active" : ""}">${name}</button>`).join("")}
+            </div>
+
+            <div class="an-nav">
+              <button type="button" data-an-nav="-1" aria-label="Previous">‹</button>
+              <span>${esc(data.label)}</span>
+              <button type="button" data-an-nav="1" aria-label="Next"
+                ${canNext ? "" : "disabled"}>›</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="an-chartwrap">
+          <svg viewBox="0 0 ${model.W} ${model.H}" role="img">${model.g}</svg>
+          <div class="an-tip" hidden></div>
+        </div>
+
+        <div class="an-note">${{
+          daily: "Hourly sales.",
+          weekly: "Sales per day of the week.",
+          monthly: "Daily sales (line) with a 7-day average (dashed).",
+          yearly: "Sales per month."
+        }[anMode]} Hover, or press and hold, on the chart to see how much was sold.</div>
+      </div>
+
+      <div class="an-panel">
+        <h3>Sales by product type</h3>
+        <div class="an-rows">${rows}</div>
+      </div>
+    `;
+
+    anBindChart(root);
+  }
+
+  function setupAnalytics() {
+    injectAnalyticsStyles();
+
+    // Analytics lives inside the Dashboard page (no separate page / menu button).
+    document.querySelectorAll('.nav-btn[data-page="analytics"]').forEach(el => el.remove());
+    $("page-analytics")?.remove();
+
+    const dash = $("page-dashboard");
+
+    if (dash && !$("anBody")) {
+      const body = document.createElement("div");
+
+      body.id = "anBody";
+      dash.prepend(body);
+
+      body.addEventListener("click", event => {
+        const modeBtn = event.target.closest("[data-an-mode]");
+        const navBtn = event.target.closest("[data-an-nav]");
+
+        if (modeBtn) {
+          anMode = modeBtn.dataset.anMode;
+          renderAnalytics();
+        } else if (navBtn && !navBtn.disabled) {
+          const next = anShift(anMode, anRef, Number(navBtn.dataset.anNav));
+
+          if (anRange(anMode, next).a <= new Date()) {
+            anRef = next;
+            renderAnalytics();
+          }
+        }
+      });
+    }
+
+    renderAnalytics();
+  }
+
+  // Remove the "Inventory CRUD" page + its sidebar button / shortcuts.
+  function removeInventoryPage() {
+    document.querySelectorAll(
+      '.nav-btn[data-page="inventory"], [data-go="inventory"]'
+    ).forEach(el => el.remove());
+
+    document.querySelectorAll(".nav-btn").forEach(btn => {
+      if (/inventory/i.test(btn.textContent || "")) btn.remove();
+    });
+
+    $("page-inventory")?.remove();
+
+    if (activePage === "inventory") showPage("dashboard");
+
+    removeCrudLinks();
+  }
+
+  // Removes any "Inventory CRUD" / "Inventory & Stock" menu item, even if another script adds it later.
+  function removeCrudLinks() {
+    const isCrud = el =>
+      /^[^\w]*(inventory\s*crud|inventory\s*(&|&amp;|and)\s*stock)\s*$/i.test((el.textContent || "").trim());
+
+    document.querySelectorAll("a, button, li, div, span").forEach(el => {
+      if (!el.isConnected || !isCrud(el)) return;
+
+      // climb to the outermost wrapper that holds only this label
+      let target = el;
+
+      while (
+        target.parentElement &&
+        target.parentElement !== document.body &&
+        isCrud(target.parentElement)
+      ) {
+        target = target.parentElement;
+      }
+
+      // also drop the page this menu item opens, if it has one
+      const pageId =
+        target.dataset?.page ||
+        target.closest?.("[data-page]")?.dataset?.page ||
+        el.dataset?.page;
+
+      if (pageId) {
+        $("page-" + pageId)?.remove();
+        if (activePage === pageId) showPage("dashboard");
+      }
+
+      target.remove();
+    });
+  }
+
+  let crudObserver = null;
+
+  function watchCrudLinks() {
+    if (crudObserver || !window.MutationObserver) return;
+
+    let queued = false;
+
+    crudObserver = new MutationObserver(() => {
+      if (queued) return;
+
+      queued = true;
+
+      requestAnimationFrame(() => {
+        queued = false;
+        removeCrudLinks();
+      });
+    });
+
+    crudObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
   // LOGIN
   $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
@@ -3292,6 +4120,32 @@ async function loadOrders() {
     });
   }
 
+  // STOCK INPUT LIMIT: while typing, anything above MAX_STOCK snaps to MAX_STOCK
+  // (works for the inventory table boxes and the Add/Edit product form).
+  document.addEventListener("input", event => {
+    const el = event.target;
+
+    if (
+      !el ||
+      !(el.matches?.(".inventory-stock-input") || el.id === "pmStock")
+    ) {
+      return;
+    }
+
+    if (el.value === "") return;
+
+    const n = Number(el.value);
+
+    if (!Number.isFinite(n)) return;
+
+    if (n > MAX_STOCK) {
+      el.value = String(MAX_STOCK);
+      notify(`Maximum stock is ${MAX_STOCK} pieces.`, "error");
+    } else if (n < 0) {
+      el.value = "0";
+    }
+  });
+
   // CUSTOMER AND FEEDBACK FILTERS
   $("customerSearch").addEventListener("input", renderCustomers);
   $("feedbackSearch").addEventListener("input", renderFeedback);
@@ -3386,6 +4240,9 @@ async function loadOrders() {
   syncReportControls();
   setupBranding();
   setupProductManager();
+  setupAnalytics();
+  removeInventoryPage();
+  watchCrudLinks();
 
   // INITIALIZE SUPABASE (single client, created only once)
   if (!validConfig()) {

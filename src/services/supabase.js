@@ -388,31 +388,63 @@ export const createOrder = async (orderPayload, items) => {
     );
   }
 
-  const paymentInfo = getPaymentInfo();
+  const paymentInfo = getPaymentInfo() || {};
 
   const paymentMethod = String(
-    paymentInfo?.method || orderPayload?.payment_method || ''
+    paymentInfo.method || orderPayload?.payment_method || ''
   )
     .trim()
     .toLowerCase();
 
   if (!['cash', 'gcash'].includes(paymentMethod)) {
-    throw new Error('Please select Cash or GCash as the payment method.');
+    throw new Error(
+      'Please select Cash or GCash as the payment method.'
+    );
   }
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Your cart is empty.');
   }
 
-  const totalAmount = Number(orderPayload?.total_amount) || 0;
+  const totalAmount = Number(orderPayload?.total_amount);
+
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    throw new Error(
+      'Invalid order total. Please return to checkout.'
+    );
+  }
+
+  // Use the cash amount entered in the payment page.
+  const rawCashReceived =
+    paymentInfo.cashReceived ?? orderPayload?.amount_paid;
+
+  const cashReceived =
+    rawCashReceived === null ||
+    rawCashReceived === undefined ||
+    rawCashReceived === ''
+      ? null
+      : Number(rawCashReceived);
+
+  if (paymentMethod === 'cash') {
+    if (
+      cashReceived === null ||
+      !Number.isFinite(cashReceived) ||
+      cashReceived < totalAmount ||
+      cashReceived > 99999
+    ) {
+      throw new Error(
+        'Invalid cash received amount. Please return to payment and enter enough cash.'
+      );
+    }
+  }
 
   const amountPaid =
-    Number(orderPayload?.amount_paid) ||
-    (paymentMethod === 'gcash' ? totalAmount : 0);
+    paymentMethod === 'cash' ? cashReceived : totalAmount;
 
   const changeAmount =
-    Number(orderPayload?.change_amount) ||
-    Math.max(0, amountPaid - totalAmount);
+    paymentMethod === 'cash'
+      ? Number((cashReceived - totalAmount).toFixed(2))
+      : 0;
 
   const orderItems = items.map((item) => {
     const productId = item.product_id || item.id;
@@ -450,17 +482,15 @@ export const createOrder = async (orderPayload, items) => {
     const paymentReference =
       orderPayload?.payment_reference || null;
 
-    const cashReceived = Number(orderPayload?.amount_paid) > 0
-      ? Number(orderPayload.amount_paid)
-      : Number(paymentInfo?.cashReceived) > 0
-        ? Number(paymentInfo.cashReceived)
-        : null;
-
-    if (paymentMethod === 'cash' && cashReceived === null) {
-      throw new Error(
-        'Cash received amount is missing. Please return to payment and enter the cash received.'
-      );
-    }
+    console.info('[FLEURS] Creating order payment details:', {
+      paymentMethod,
+      totalAmount,
+      amountPaid,
+      cashReceivedSentToRpc:
+        paymentMethod === 'cash' ? cashReceived : null,
+      changeAmount,
+      idempotencyKey,
+    });
 
     const controller = new AbortController();
     let timeoutId;
@@ -503,20 +533,45 @@ export const createOrder = async (orderPayload, items) => {
         );
       }
 
+      console.info('[FLEURS] Order response:', {
+        orderNumber: result.order_number,
+        paymentMethod: result.payment_method,
+        cashReceived: result.cash_received,
+        amountPaid: result.amount_paid,
+        changeAmount: result.change_amount,
+        idempotentReplay: result.idempotent_replay,
+      });
+
+      if (
+        paymentMethod === 'cash' &&
+        !result.idempotent_replay &&
+        (
+          result.amount_paid == null ||
+          Number(result.amount_paid) !== cashReceived ||
+          result.change_amount == null ||
+          Number(result.change_amount) !== changeAmount
+        )
+      ) {
+        console.error(
+          '[FLEURS] Cash payment values do not match the RPC response.',
+          { expectedCash: cashReceived, expectedChange: changeAmount, result }
+        );
+      }
+
       return {
         ...result,
         order_number: result.order_number,
         total_amount: Number(result.total_amount ?? totalAmount),
         payment_method: result.payment_method || paymentMethod,
         amount_paid: Number(result.amount_paid ?? amountPaid),
-        cash_received: Number(
-          result.cash_received ?? (
-            paymentMethod === 'cash' ? cashReceived : amountPaid
-          )
-        ),
-        change_amount: Number(
-          result.change_amount ?? changeAmount
-        ),
+        cash_received:
+          result.cash_received == null
+            ? null
+            : Number(result.cash_received),
+        change_amount:
+          result.change_amount == null
+            ? null
+            : Number(result.change_amount),
         status: result.status || 'pending',
         payment_status: result.payment_status || 'pending',
       };
@@ -571,7 +626,7 @@ export const createOrder = async (orderPayload, items) => {
     total_amount: totalAmount,
     amount_paid: amountPaid,
     cash_received:
-      paymentMethod === 'cash' ? amountPaid : null,
+      paymentMethod === 'cash' ? cashReceived : null,
     change_amount: changeAmount,
     status: 'pending',
     payment_status: 'pending',
