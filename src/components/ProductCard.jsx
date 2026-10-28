@@ -50,6 +50,7 @@ export const ProductCard = ({ product, onSelect }) => {
         transition: 'box-shadow 180ms ease, transform 180ms ease',
       }}
     >
+      {/* Decorative bow */}
       <div
         aria-hidden="true"
         style={{
@@ -63,6 +64,7 @@ export const ProductCard = ({ product, onSelect }) => {
         <BowSvg style={{ width: '42px', height: '26px' }} />
       </div>
 
+      {/* Product price */}
       <div
         className="price-badge"
         style={{
@@ -74,6 +76,7 @@ export const ProductCard = ({ product, onSelect }) => {
         ₱{Number(product.price).toLocaleString()}
       </div>
 
+      {/* Product image */}
       <div
         className="image-frame"
         style={{
@@ -100,12 +103,19 @@ export const ProductCard = ({ product, onSelect }) => {
             }}
           />
         ) : (
-          <div style={{ padding: '30px 8px', textAlign: 'center' }}>
+          <div
+            style={{
+              padding: '30px 8px',
+              textAlign: 'center',
+              color: '#9d7180',
+            }}
+          >
             No image available
           </div>
         )}
       </div>
 
+      {/* Product name */}
       <h3
         className="product-title"
         style={{
@@ -117,6 +127,7 @@ export const ProductCard = ({ product, onSelect }) => {
         {product.name}
       </h3>
 
+      {/* Stock status */}
       <div
         role="status"
         aria-live="polite"
@@ -131,29 +142,30 @@ export const ProductCard = ({ product, onSelect }) => {
           fontWeight: 800,
           lineHeight: 1.4,
           letterSpacing: '0.02em',
-         background: stockUnknown
-  ? '#fff1f2'
-  : soldOut
-    ? '#fff0f3'
-    : qty <= 10
-      ? '#fff4c7'
-      : '#fce7f3',
 
-color: stockUnknown
-  ? '#be123c'
-  : soldOut
-    ? '#be3455'
-    : qty <= 10
-      ? '#92400e'
-      : '#be185d',
+          background: stockUnknown
+            ? '#fff1f2'
+            : soldOut
+              ? '#fff0f3'
+              : qty <= 10
+                ? '#fff4c7'
+                : '#fce7f3',
 
-border: `1px solid ${
-  unavailable
-    ? '#f8cbd7'
-    : qty <= 10
-      ? '#fcd34d'
-      : '#f9a8d4'
-}`,
+          color: stockUnknown
+            ? '#be123c'
+            : soldOut
+              ? '#be3455'
+              : qty <= 10
+                ? '#92400e'
+                : '#be185d',
+
+          border: `1px solid ${
+            unavailable
+              ? '#f8cbd7'
+              : qty <= 10
+                ? '#fcd34d'
+                : '#f9a8d4'
+          }`,
         }}
       >
         {stockUnknown
@@ -165,17 +177,32 @@ border: `1px solid ${
               : `${qty} IN STOCK`}
       </div>
 
+      {/* Soft pink Tap to Select */}
       {!unavailable && (
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '11px 14px',
+            borderRadius: '12px',
+            background:
+              'linear-gradient(135deg, #fff0f6 0%, #fce7f3 100%)',
+            border: '1px solid #f4b8d0',
+            color: '#be185d',
+            fontSize: '0.78rem',
+            fontWeight: 800,
+            letterSpacing: '0.09em',
             textAlign: 'center',
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            color: '#be5678',
-            padding: '4px 0',
+            boxShadow: '0 3px 8px rgba(190, 24, 93, 0.08)',
           }}
         >
-          TAP TO SELECT
+          <span aria-hidden="true">♡</span>
+          <span>TAP TO SELECT</span>
+          <span aria-hidden="true">♡</span>
         </div>
       )}
     </div>

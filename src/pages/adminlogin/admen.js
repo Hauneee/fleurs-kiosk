@@ -3867,32 +3867,16 @@
     renderAnalytics();
   }
 
-  // Remove the "Inventory CRUD" page + its sidebar button / shortcuts.
-  function removeInventoryPage() {
-    document.querySelectorAll(
-      '.nav-btn[data-page="inventory"], [data-go="inventory"]'
-    ).forEach(el => el.remove());
-
-    document.querySelectorAll(".nav-btn").forEach(btn => {
-      if (/inventory/i.test(btn.textContent || "")) btn.remove();
-    });
-
-    $("page-inventory")?.remove();
-
-    if (activePage === "inventory") showPage("dashboard");
-
-    removeCrudLinks();
-  }
-
-  // Removes any "Inventory CRUD" / "Inventory & Stock" menu item, even if another script adds it later.
-  function removeCrudLinks() {
+  // Hides ONLY the "Inventory CRUD" menu item (even if another script adds it later).
+  // Products & Inventory and its page are left untouched.
+  function removeCrudLink() {
     const isCrud = el =>
-      /^[^\w]*(inventory\s*crud|inventory\s*(&|&amp;|and)\s*stock)\s*$/i.test((el.textContent || "").trim());
+      /^[^\w]*inventory\s*crud\s*$/i.test((el.textContent || "").trim());
 
     document.querySelectorAll("a, button, li, div, span").forEach(el => {
       if (!el.isConnected || !isCrud(el)) return;
+      if (el.closest('[data-page="inventory"]')) return;
 
-      // climb to the outermost wrapper that holds only this label
       let target = el;
 
       while (
@@ -3903,40 +3887,27 @@
         target = target.parentElement;
       }
 
-      // also drop the page this menu item opens, if it has one
-      const pageId =
-        target.dataset?.page ||
-        target.closest?.("[data-page]")?.dataset?.page ||
-        el.dataset?.page;
-
-      if (pageId) {
-        $("page-" + pageId)?.remove();
-        if (activePage === pageId) showPage("dashboard");
-      }
-
       target.remove();
     });
   }
 
-  let crudObserver = null;
+  function watchCrudLink() {
+    removeCrudLink();
 
-  function watchCrudLinks() {
-    if (crudObserver || !window.MutationObserver) return;
+    if (!window.MutationObserver) return;
 
     let queued = false;
 
-    crudObserver = new MutationObserver(() => {
+    new MutationObserver(() => {
       if (queued) return;
 
       queued = true;
 
       requestAnimationFrame(() => {
         queued = false;
-        removeCrudLinks();
+        removeCrudLink();
       });
-    });
-
-    crudObserver.observe(document.body, { childList: true, subtree: true });
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   // LOGIN
@@ -4241,8 +4212,7 @@
   setupBranding();
   setupProductManager();
   setupAnalytics();
-  removeInventoryPage();
-  watchCrudLinks();
+  watchCrudLink();
 
   // INITIALIZE SUPABASE (single client, created only once)
   if (!validConfig()) {
